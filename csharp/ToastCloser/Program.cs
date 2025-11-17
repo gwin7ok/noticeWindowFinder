@@ -138,57 +138,76 @@ namespace ToastCloser
                     {
                         // try CoreWindow by name '新しい通知' first
                         var coreByNameCond = cf.ByClassName("Windows.UI.Core.CoreWindow").And(cf.ByName("新しい通知"));
-                        var coreElement = desktop.FindFirstDescendant(coreByNameCond);
+                        // Fast native pre-check: enumerate top-level HWNDs to see if a CoreWindow with title '新しい通知' exists.
+                        // This avoids calling UIA desktop.FindFirstDescendant which can block for seconds when provider is unresponsive.
+                        var preMs = (DateTime.UtcNow - searchStart).TotalMilliseconds;
+                        bool nativeFound = IsCoreNotificationWindowPresentNative();
+                        LogConsole($"Native EnumWindows check for CoreWindow(Name='新しい通知') found={nativeFound} (elapsed={preMs:0.0}ms)");
+                        AutomationElement? coreElement = null;
+                        if (nativeFound)
+                        {
+                            LogConsole($"Calling desktop.FindFirstDescendant(CoreWindow by name) (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                            coreElement = desktop.FindFirstDescendant(coreByNameCond);
+                        }
+                        LogConsole($"CoreWindow found={(coreElement != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+
                         if (coreElement == null)
                         {
-                            // fallback to any CoreWindow
-                            coreElement = desktop.FindFirstDescendant(cf.ByClassName("Windows.UI.Core.CoreWindow"));
+                            // Named CoreWindow not present: end search here
+                            LogConsole($"CoreWindow(Name='新しい通知') not found; ending CoreWindow-based search. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                         }
-
-                        if (coreElement != null)
+                        else
                         {
+                            LogConsole($"Finding ScrollViewer under CoreWindow (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                             var scroll = coreElement.FindFirstDescendant(cf.ByClassName("ScrollViewer"));
+                            LogConsole($"ScrollViewer found={(scroll != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+
                             if (scroll != null)
                             {
+                                LogConsole($"Enumerating FlexibleToastView under ScrollViewer (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                                 var toasts = scroll.FindAllDescendants(cf.ByClassName("FlexibleToastView"));
+                                LogConsole($"FlexibleToastView count={(toasts?.Length ?? 0)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+
                                 if (toasts != null && toasts.Length > 0)
                                 {
                                     foreach (var t in toasts)
                                     {
                                         try
                                         {
+                                            LogConsole($"Inspecting FlexibleToastView candidate (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                                             var tbAttrCond = cf.ByClassName("TextBlock").And(cf.ByAutomationId("Attribution")).And(cf.ByControlType(ControlType.Text));
                                             var tbAttr = t.FindFirstDescendant(tbAttrCond);
+                                            LogConsole($"Attribution found={(tbAttr != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                                             if (tbAttr != null)
                                             {
                                                 var attr = SafeGetName(tbAttr);
+                                                LogConsole($"Attribution.Name=\"{attr}\" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                                                 if (!string.IsNullOrEmpty(attr) && attr.IndexOf("youtube", StringComparison.OrdinalIgnoreCase) >= 0)
                                                 {
                                                     foundList.Add(t);
+                                                    LogConsole($"Added FlexibleToastView candidate (Attribution contains 'youtube') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                                                 }
                                             }
                                         }
-                                        catch { }
+                                        catch (Exception ex)
+                                        {
+                                            LogConsole("Error while inspecting toast: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    catch { }
-
-                    // No additional fallback: use only CoreWindow->ScrollViewer->FlexibleToastView discovery results
-                    FlaUI.Core.AutomationElements.AutomationElement[] found = foundList.ToArray();
-                    if (found.Length == 0)
+                    catch (Exception ex)
                     {
-                        LogConsole("No FlexibleToastView candidates found via CoreWindow path; ending search for this scan.");
-                        found = new FlaUI.Core.AutomationElements.AutomationElement[0];
-                        usedFallback = false;
+                        LogConsole("Exception during CoreWindow path: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                     }
 
-                    // Skip heavy fallback full-tree scans; rely only on CoreWindow-based discovery and quick class search above.
+                    // Use only CoreWindow->ScrollViewer->FlexibleToastView discovery results; no heavy fallbacks
+                    FlaUI.Core.AutomationElements.AutomationElement[] found = foundList.ToArray();
                     if (found == null || found.Length == 0)
                     {
-                        LogConsole("No toasts found by CoreWindow-based search; skipping heavy fallback to avoid long scans.");
+                        LogConsole($"No toasts found by CoreWindow-based search; ending search for this scan. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                         found = new FlaUI.Core.AutomationElements.AutomationElement[0];
                         usedFallback = false;
                     }
@@ -844,6 +863,45 @@ namespace ToastCloser
             }
             catch { }
             return IntPtr.Zero;
+        }
+
+        // Fast native check: enumerate top-level HWNDs and look for a CoreWindow whose title contains '新しい通知'.
+        // This is much faster and more robust than calling UIA's FindFirstDescendant when the UIA provider
+        // (Action Center, Shell, etc.) is in a state that blocks UIA calls.
+        private static bool IsCoreNotificationWindowPresentNative()
+        {
+            bool found = false;
+            try
+            {
+                NativeMethods.EnumWindows((h, l) =>
+                {
+                    try
+                    {
+                        if (!NativeMethods.IsWindowVisible(h)) return true; // continue
+                        var className = new System.Text.StringBuilder(256);
+                        var clen = NativeMethods.GetClassName(h, className, className.Capacity);
+                        if (clen > 0)
+                        {
+                            var cls = className.ToString();
+                            if (string.Equals(cls, "Windows.UI.Core.CoreWindow", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var titleSb = new System.Text.StringBuilder(256);
+                                NativeMethods.GetWindowText(h, titleSb, titleSb.Capacity);
+                                var title = titleSb.ToString() ?? string.Empty;
+                                if (title.IndexOf("新しい通知", StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    found = true;
+                                    return false; // stop enumeration
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                    return true; // continue
+                }, IntPtr.Zero);
+            }
+            catch { }
+            return found;
         }
 
         class SimpleLogger : IDisposable
