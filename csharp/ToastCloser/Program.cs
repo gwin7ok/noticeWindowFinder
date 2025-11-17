@@ -125,6 +125,10 @@ namespace ToastCloser
 
                     var desktop = automation.GetDesktop();
 
+                    // Log search start time for diagnostics
+                    var searchStart = DateTime.UtcNow;
+                    LogConsole("Toast search: start");
+
                     // Primary search: class only (AutomationId is not required)
                     var cond = cf.ByClassName("FlexibleToastView");
                     var found = desktop.FindAllDescendants(cond);
@@ -175,7 +179,10 @@ namespace ToastCloser
                         }
                     }
 
-                    logger.Debug($"Scan found {found.Length} candidates (usedFallback={usedFallback})");
+                    var searchEnd = DateTime.UtcNow;
+                    var searchMs = (searchEnd - searchStart).TotalMilliseconds;
+                    LogConsole($"Toast search: end (duration={searchMs:0.0}ms) found={found.Length} usedFallback={usedFallback}");
+                    logger.Debug($"Scan found {found.Length} candidates (usedFallback={usedFallback}) durationMs={searchMs:0.0}");
                     for (int _i = 0; _i < found.Length; _i++)
                     {
                         var w = found[_i];
