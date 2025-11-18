@@ -96,14 +96,19 @@ class Program
         {
             try
             {
+                Console.WriteLine($"\n=== Trial {i+1}/{trials} start: {DateTime.Now:O} ===");
+                bool wasAutomationNull = automation == null;
                 EnsureAutomation();
+                Console.WriteLine(wasAutomationNull ? "  UIA initialized (new)" : "  UIA reused");
 
                 var trialOverallSw = System.Diagnostics.Stopwatch.StartNew();
 
                 // Instrument: condition build
+                Console.WriteLine("  Building condition...");
                 var condSw = System.Diagnostics.Stopwatch.StartNew();
                 var cond = cf!.ByClassName("Windows.UI.Core.CoreWindow").And(cf.ByName(targetName));
                 condSw.Stop();
+                Console.WriteLine($"  Condition built in {condSw.ElapsedMilliseconds}ms");
 
                 // Attempt Find with timeout and optional reinit+retry
                 FlaUI.Core.AutomationElements.AutomationElement? el = null;
@@ -120,8 +125,10 @@ class Program
                     {
                         // Run Find on threadpool and wait with timeout
                         var localDesktop = desktop!; // capture
+                        Console.WriteLine($"  Attempt {attempt}: starting FindFirstDescendant (3s timeout)...");
                         var task = System.Threading.Tasks.Task.Run(() => localDesktop.FindFirstDescendant(cond));
                         bool completed = task.Wait(TimeSpan.FromSeconds(3));
+                        Console.WriteLine($"  Attempt {attempt}: FindFirstDescendant returned completed={completed}");
                         findSw.Stop();
                         findCallMs = findSw.ElapsedMilliseconds;
                         if (completed)
@@ -138,6 +145,7 @@ class Program
                             automation = null; cf = null; desktop = null;
                             System.Threading.Thread.Sleep(200);
                             EnsureAutomation();
+                            Console.WriteLine("  UIA reinitialized; will retry find.");
                             // update desktop reference for next attempt
                         }
                     }
@@ -154,11 +162,12 @@ class Program
                 long hwndVal = 0;
                 if (el != null)
                 {
+                    Console.WriteLine("  Reading properties from found element...");
                     var propSw = System.Diagnostics.Stopwatch.StartNew();
                     try { hwndVal = Convert.ToInt64(el.Properties.NativeWindowHandle.ValueOrDefault); } catch { }
                     propSw.Stop();
                     propSwMs = propSw.ElapsedMilliseconds;
-                    Console.WriteLine($"FlaUI: Found element Name='{el.Properties.Name.ValueOrDefault}' Class='{el.ClassName}' NativeWindowHandle=0x{hwndVal:X}");
+                    Console.WriteLine($"  FlaUI: Found element Name='{el.Properties.Name.ValueOrDefault}' Class='{el.ClassName}' NativeWindowHandle=0x{hwndVal:X} (propRead={propSwMs}ms)");
                 }
 
                 trialOverallSw.Stop();
