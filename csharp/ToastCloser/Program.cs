@@ -275,10 +275,10 @@ namespace ToastCloser
                                                 {
                                                     var attr = SafeGetName(tbAttr);
                                                     LogConsole($"Attribution.Name=\"{attr}\" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                                                    if (!string.IsNullOrEmpty(attr) && attr.IndexOf("youtube", StringComparison.OrdinalIgnoreCase) >= 0)
+                                                    if (!string.IsNullOrEmpty(attr) && attr.IndexOf("www.youtube.com", StringComparison.OrdinalIgnoreCase) >= 0)
                                                     {
                                                         localFound.Add(t);
-                                                        LogConsole($"Added FlexibleToastView candidate (Attribution contains 'youtube') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                        LogConsole($"Added FlexibleToastView candidate (Attribution contains 'www.youtube.com') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                                                     }
                                                 }
                                             }
