@@ -181,14 +181,15 @@ namespace ToastCloser
 
                     try
                     {
-                        // keyboard: if any key currently down, update keyboard tick
+                        // keyboard: consider only real key transitions or down states for common keyboard VKs
                         for (int vk = 0x01; vk <= 0xFE; vk++)
                         {
                             try
                             {
                                 short s = NativeMethods.GetAsyncKeyState(vk);
-                                bool down = (s & 0x8000) != 0;
-                                if (down)
+                                bool transition = (s & 0x0001) != 0; // key pressed since last call
+                                bool down = (s & 0x8000) != 0; // key currently down
+                                if (transition || (down && IsKeyboardVirtualKey(vk)))
                                 {
                                     _lastKeyboardTick = (uint)Environment.TickCount;
                                     break;
@@ -548,32 +549,133 @@ namespace ToastCloser
 
                                     uint lastKbMouseTick = Math.Max(_lastKeyboardTick, _lastMouseTick);
 
-                                    // If we have a real keyboard/mouse timestamp, measure delta between system LastInput and that timestamp.
+                                    // If the user is active (idle < preserveHistoryIdleMs), wait and retry until idle condition is met.
                                     bool treatAsActive = false;
-                                    if (lastKbMouseTick != 0 && lastSystemTick != 0)
+                                    try
                                     {
-                                        uint delta;
-                                        if (lastSystemTick >= lastKbMouseTick) delta = lastSystemTick - lastKbMouseTick;
-                                        else delta = (uint)((uint.MaxValue - lastKbMouseTick) + lastSystemTick + 1);
-                                        if (delta <= (uint)preserveHistoryIdleMs)
+                                        while (true)
                                         {
-                                            treatAsActive = true;
-                                            LogConsole($"key={key} Skipping preserve-history because recent keyboard/mouse activity detected (delta={delta}ms <= {preserveHistoryIdleMs}ms)");
-                                            logger.Debug($"key={key} Skipping preserve-history because recent keyboard/mouse activity detected (delta={delta}ms <= {preserveHistoryIdleMs}ms)");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        // Fallback: no keyboard/mouse timestamp available — use system idle as before
-                                        var sysIdle = GetIdleMilliseconds();
-                                        if (sysIdle < (uint)preserveHistoryIdleMs)
-                                        {
-                                            treatAsActive = true;
-                                            LogConsole($"key={key} Skipping preserve-history because user active (system idle={sysIdle}ms < {preserveHistoryIdleMs}ms)");
-                                            logger.Debug($"key={key} Skipping preserve-history because user active (system idle={sysIdle}ms < {preserveHistoryIdleMs}ms)");
-                                        }
-                                    }
+                                            // Prefer keyboard/mouse ticks (_lastKeyboardTick/_lastMouseTick) to determine activity
+                                            uint curLastKbMouseTick = Math.Max(_lastKeyboardTick, _lastMouseTick);
+                                            uint curLastSystemTick = 0;
+                                            try
+                                            {
+                                                var li2 = new NativeMethods.LASTINPUTINFO();
+                                                li2.cbSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.LASTINPUTINFO));
+                                                if (NativeMethods.GetLastInputInfo(ref li2)) curLastSystemTick = li2.dwTime;
+                                            }
+                                            catch { }
 
+                                            // Diagnostic: log current tick values to verify updates
+                                            try
+                                            {
+                                                var dbgSys = curLastSystemTick;
+                                                LogConsole($"key={key} DebugTicks: EnvTick={Environment.TickCount} lastKb={_lastKeyboardTick} lastMouse={_lastMouseTick} curLastKbMouseTick={curLastKbMouseTick} lastSystemInput={dbgSys}");
+                                                logger.Debug($"key={key} DebugTicks: EnvTick={Environment.TickCount} lastKb={_lastKeyboardTick} lastMouse={_lastMouseTick} curLastKbMouseTick={curLastKbMouseTick} lastSystemInput={dbgSys}");
+                                            }
+                                            catch { }
+
+                                            bool isActiveNow = false;
+                                            // Primary check: use Environment.TickCount-based keyboard/mouse ticks (consistent base)
+                                            if (curLastKbMouseTick != 0)
+                                            {
+                                                uint elapsedSinceLastInput = (uint)(Environment.TickCount - curLastKbMouseTick);
+                                                if (elapsedSinceLastInput <= (uint)preserveHistoryIdleMs)
+                                                {
+                                                    isActiveNow = true;
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // No keyboard/mouse ticks available; do NOT use GetIdleMilliseconds() fallback (can be noisy).
+                                                // In this case, treat as idle so preserve-history proceeds.
+                                                LogConsole($"key={key} No keyboard/mouse ticks available; proceeding without GetIdleMilliseconds() fallback");
+                                                logger.Debug($"key={key} No keyboard/mouse ticks available; proceeding without GetIdleMilliseconds() fallback");
+                                                isActiveNow = false;
+                                            }
+
+                                            if (!isActiveNow)
+                                            {
+                                                // idle condition satisfied — proceed to toggle Action Center
+                                                LogConsole($"key={key} User idle (based on keyboard/mouse ticks and system idle) — proceeding to preserve-history");
+                                                logger.Debug($"key={key} User idle (based on keyboard/mouse ticks and system idle) — proceeding to preserve-history");
+                                                treatAsActive = false;
+                                                break;
+                                            }
+
+                                            // still active: wait in short intervals and poll keyboard/mouse so input during wait updates ticks
+                                            LogConsole($"key={key} User active: waiting up to {preserveHistoryIdleMs}ms while polling for keyboard/mouse activity (preserve-history)");
+                                            logger.Debug($"key={key} User active: waiting up to {preserveHistoryIdleMs}ms while polling for keyboard/mouse activity (preserve-history)");
+                                            treatAsActive = true;
+
+                                            int waited = 0;
+                                            int step = Math.Min(200, Math.Max(50, preserveHistoryIdleMs / 10));
+                                            bool innerIdleSatisfied = false;
+                                            while (waited < preserveHistoryIdleMs)
+                                            {
+                                                Thread.Sleep(step);
+                                                waited += step;
+
+                                                // Poll mouse position
+                                                try
+                                                {
+                                                    if (NativeMethods.GetCursorPos(out var curPos))
+                                                    {
+                                                        if (curPos.X != _lastCursorPos.X || curPos.Y != _lastCursorPos.Y)
+                                                        {
+                                                            _lastCursorPos = curPos;
+                                                            _lastMouseTick = (uint)Environment.TickCount;
+                                                            LogConsole($"key={key} Detected mouse movement during wait; updating lastMouseTick");
+                                                            // activity detected; re-evaluate outer loop
+                                                            break; // re-evaluate outer loop
+                                                        }
+                                                    }
+                                                }
+                                                catch { }
+
+                                                // Poll keyboard: check for transitions or down states on common keyboard VKs
+                                                try
+                                                {
+                                                    for (int vk = 0x01; vk <= 0xFE; vk++)
+                                                    {
+                                                        try
+                                                        {
+                                                            short s = NativeMethods.GetAsyncKeyState(vk);
+                                                            bool transition = (s & 0x0001) != 0;
+                                                            bool down = (s & 0x8000) != 0;
+                                                            if (transition || (down && IsKeyboardVirtualKey(vk)))
+                                                            {
+                                                                _lastKeyboardTick = (uint)Environment.TickCount;
+                                                                LogConsole($"key={key} Detected keyboard activity (vk={vk}) during wait; updating lastKeyboardTick");
+                                                                // activity detected; re-evaluate outer loop
+                                                                break;
+                                                            }
+                                                        }
+                                                        catch { }
+                                                    }
+                                                }
+                                                catch { }
+
+                                                // After polling, if no activity has occurred for preserveHistoryIdleMs, proceed immediately
+                                                try
+                                                {
+                                                    uint elapsedSinceLastInput = (uint)(Environment.TickCount - Math.Max(_lastKeyboardTick, _lastMouseTick));
+                                                    if (elapsedSinceLastInput >= (uint)preserveHistoryIdleMs)
+                                                    {
+                                                        innerIdleSatisfied = true;
+                                                        break; // exit inner wait loop and proceed to preserve-history
+                                                    }
+                                                }
+                                                catch { }
+                                            }
+                                            // If inner loop observed sustained idle, treat as not active and proceed
+                                            if (innerIdleSatisfied)
+                                            {
+                                                isActiveNow = false;
+                                            }
+                                        }
+                                    }
+                                    catch (ThreadInterruptedException) { }
                                     if (treatAsActive)
                                     {
                                         closed = false; // do not mark closed; retry next poll
@@ -1106,9 +1208,28 @@ namespace ToastCloser
             }
             return false;
         }
-    }
 
-    static class NativeMethods
+        // Helper: classify whether a virtual-key code is a likely keyboard key
+        private static bool IsKeyboardVirtualKey(int vk)
+        {
+            // 0x30-0x5A: 0-9, A-Z
+            if (vk >= 0x30 && vk <= 0x5A) return true;
+            // 0x60-0x6F: Numpad 0-9 and ops
+            if (vk >= 0x60 && vk <= 0x6F) return true;
+            // 0x70-0x87: Function keys
+            if (vk >= 0x70 && vk <= 0x87) return true;
+            // common control keys: SHIFT, CTRL, ALT, SPACE, TAB, ENTER, BACK
+            if (vk == 0x10 || vk == 0x11 || vk == 0x12) return true; // SHIFT, CTRL, ALT
+            if (vk == 0x20 || vk == 0x09 || vk == 0x0D || vk == 0x08) return true; // SPACE, TAB, ENTER, BACK
+            // arrows
+            if (vk >= 0x25 && vk <= 0x28) return true;
+            // punctuation and OEM keys often used on keyboards
+            if ((vk >= 0xBA && vk <= 0xC0) || (vk >= 0xDB && vk <= 0xDF)) return true;
+            return false;
+            }
+        }
+
+        static class NativeMethods
     {
         public const uint WM_CLOSE = 0x0010;
         public const int INPUT_MOUSE = 0;
