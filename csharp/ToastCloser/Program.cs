@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using FlaUI.Core;
 using FlaUI.Core.Definitions;
 using FlaUI.Core.Conditions;
@@ -29,6 +30,8 @@ namespace ToastCloser
             bool wmCloseOnly = false;
             bool skipFallback = false;
             int preserveHistoryIdleMs = 2000; // default: require 2s idle
+            // detection timeout (ms) for UIA searches to avoid long blocking calls after close actions
+            int detectionTimeoutMs = 2000; // default: 2000ms
 
             // Parse positional args first (min, max, poll) but also allow a named flag --detect-only or --no-auto-close
             var argList = args?.ToList() ?? new List<string>();
@@ -66,7 +69,26 @@ namespace ToastCloser
             if (argList.Count >= 2) double.TryParse(argList[1], out maxSeconds);
             if (argList.Count >= 3) double.TryParse(argList[2], out poll);
 
-            LogConsole($"ToastCloser starting (min={minSeconds} max={maxSeconds} poll={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback})");
+            // allow optional detection timeout override: --detection-timeout-ms=ms
+            var detArg = argList.FirstOrDefault(a => a.StartsWith("--detection-timeout-ms="));
+            if (!string.IsNullOrEmpty(detArg))
+            {
+                var part = detArg.Split('=');
+                if (part.Length == 2 && int.TryParse(part[1], out var v)) detectionTimeoutMs = Math.Max(0, v);
+                argList = argList.Where(a => !a.StartsWith("--detection-timeout-ms=")).ToList();
+            }
+
+            // allow optional Win+A delay override: --win-a-delay-ms=ms (default 300ms)
+            int winADelayMs = 300;
+            var winADelayArg = argList.FirstOrDefault(a => a.StartsWith("--win-a-delay-ms="));
+            if (!string.IsNullOrEmpty(winADelayArg))
+            {
+                var part = winADelayArg.Split('=');
+                if (part.Length == 2 && int.TryParse(part[1], out var v)) winADelayMs = Math.Max(0, v);
+                argList = argList.Where(a => !a.StartsWith("--win-a-delay-ms=")).ToList();
+            }
+
+            LogConsole($"ToastCloser starting (min={minSeconds} max={maxSeconds} poll={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMs={detectionTimeoutMs} winADelayMs={winADelayMs})");
 
             var tracked = new Dictionary<string, TrackedInfo>();
             var groups = new Dictionary<int, DateTime>();
@@ -76,9 +98,33 @@ namespace ToastCloser
             var exeFolder = AppContext.BaseDirectory;
             var logPath = System.IO.Path.Combine(exeFolder, "auto_closer.log");
             var logger = new SimpleLogger(logPath);
+            // expose logger for static helpers to use when writing diagnostic entries
+            SimpleLogger.Instance = logger;
 
-            using var automation = new UIA3Automation();
-            var cf = new ConditionFactory(new UIA3PropertyLibrary());
+            // UIA automation instances are reinitializable on timeout. Keep them in mutable variables
+            UIA3Automation? automation = new UIA3Automation();
+            ConditionFactory? cf = new ConditionFactory(new UIA3PropertyLibrary());
+            FlaUI.Core.AutomationElements.AutomationElement? desktop = automation?.GetDesktop();
+            var automationLock = new object();
+
+            // helper to initialize or reinitialize automation (thread-safe)
+            Action InitializeAutomation = () =>
+            {
+                lock (automationLock)
+                {
+                    try
+                    {
+                        try { automation?.Dispose(); } catch { }
+                        automation = new UIA3Automation();
+                        cf = new ConditionFactory(new UIA3PropertyLibrary());
+                        desktop = automation?.GetDesktop();
+                    }
+                    catch { desktop = automation?.GetDesktop(); }
+                }
+            };
+
+            // initialize automation first time
+            InitializeAutomation();
 
             // initialize cursor position
             try { NativeMethods.GetCursorPos(out _lastCursorPos); } catch { }
@@ -123,7 +169,10 @@ namespace ToastCloser
                     }
                     catch { }
 
-                    var desktop = automation.GetDesktop();
+                    lock (automationLock)
+                    {
+                        try { desktop = automation?.GetDesktop(); } catch { desktop = automation?.GetDesktop(); }
+                    }
 
                     // Log search start time for diagnostics
                     var searchStart = DateTime.UtcNow;
@@ -134,73 +183,135 @@ namespace ToastCloser
                     var foundList = new List<FlaUI.Core.AutomationElements.AutomationElement>();
                     bool usedFallback = false;
 
-                    try
+                    // Run the CoreWindow -> ScrollViewer -> FlexibleToastView discovery on a worker task
+                    // and enforce a timeout to avoid long blocking UIA calls immediately after close actions.
+                    Task<(List<FlaUI.Core.AutomationElements.AutomationElement> foundLocal, bool usedFallbackLocal)> searchTask = Task.Run(() =>
                     {
-                        // try CoreWindow by name '新しい通知' first
-                        var coreByNameCond = cf.ByClassName("Windows.UI.Core.CoreWindow").And(cf.ByName("新しい通知"));
-                        // Direct UIA search for CoreWindow by name (do not rely on native EnumWindows pre-check).
-                        AutomationElement? coreElement = null;
+                        var localFound = new List<FlaUI.Core.AutomationElements.AutomationElement>();
+                        bool localUsedFallback = false;
                         try
                         {
-                            LogConsole($"Calling desktop.FindFirstChild(CoreWindow by name) (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                            coreElement = desktop.FindFirstChild(coreByNameCond);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogConsole("Exception during UIA CoreWindow search: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                        }
-                        LogConsole($"CoreWindow found={(coreElement != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-
-                        if (coreElement == null)
-                        {
-                            // Named CoreWindow not present: end search here
-                            LogConsole($"CoreWindow(Name='新しい通知') not found; ending CoreWindow-based search. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                        }
-                        else
-                        {
-                            LogConsole($"Finding ScrollViewer under CoreWindow (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                            var scroll = coreElement.FindFirstDescendant(cf.ByClassName("ScrollViewer"));
-                            LogConsole($"ScrollViewer found={(scroll != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-
-                            if (scroll != null)
+                            // capture local automation references to avoid races
+                            var localCf = cf;
+                            var localDesktop = desktop;
+                            if (localCf == null || localDesktop == null)
                             {
-                                LogConsole($"Enumerating FlexibleToastView under ScrollViewer (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                                var toasts = scroll.FindAllDescendants(cf.ByClassName("FlexibleToastView"));
-                                LogConsole($"FlexibleToastView count={(toasts?.Length ?? 0)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                LogConsole("UIA not initialized for search; skipping local search");
+                                return (localFound, localUsedFallback);
+                            }
+                            // try CoreWindow by name '新しい通知' first
+                            var coreByNameCond = localCf.ByClassName("Windows.UI.Core.CoreWindow").And(localCf.ByName("新しい通知"));
+                            // Direct UIA search for CoreWindow by name (do not rely on native EnumWindows pre-check).
+                            AutomationElement? coreElement = null;
+                            try
+                            {
+                                LogConsole($"Calling desktop.FindFirstChild(CoreWindow by name) (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                coreElement = localDesktop.FindFirstChild(coreByNameCond);
+                            }
+                            catch (Exception ex)
+                            {
+                                LogConsole("Exception during UIA CoreWindow search: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                            }
+                                LogConsole($"CoreWindow found={(coreElement != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
 
-                                if (toasts != null && toasts.Length > 0)
+                            if (coreElement == null)
+                            {
+                                // Named CoreWindow not present: end search here
+                                LogConsole($"CoreWindow(Name='新しい通知') not found; ending CoreWindow-based search. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                            }
+                            else
+                            {
+                                LogConsole($"Finding ScrollViewer under CoreWindow (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                var scroll = coreElement.FindFirstDescendant(localCf.ByClassName("ScrollViewer"));
+                                LogConsole($"ScrollViewer found={(scroll != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+
+                                if (scroll != null)
                                 {
-                                    foreach (var t in toasts)
+                                    LogConsole($"Enumerating FlexibleToastView under ScrollViewer (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                    var toasts = scroll.FindAllDescendants(cf.ByClassName("FlexibleToastView"));
+                                    LogConsole($"FlexibleToastView count={(toasts?.Length ?? 0)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+
+                                    if (toasts != null && toasts.Length > 0)
                                     {
-                                        try
+                                        foreach (var t in toasts)
                                         {
-                                            LogConsole($"Inspecting FlexibleToastView candidate (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                                            var tbAttrCond = cf.ByClassName("TextBlock").And(cf.ByAutomationId("Attribution")).And(cf.ByControlType(ControlType.Text));
-                                            var tbAttr = t.FindFirstDescendant(tbAttrCond);
-                                            LogConsole($"Attribution found={(tbAttr != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                                            if (tbAttr != null)
+                                            try
                                             {
-                                                var attr = SafeGetName(tbAttr);
-                                                LogConsole($"Attribution.Name=\"{attr}\" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                                                if (!string.IsNullOrEmpty(attr) && attr.IndexOf("youtube", StringComparison.OrdinalIgnoreCase) >= 0)
+                                                            LogConsole($"Inspecting FlexibleToastView candidate (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                            var tbAttrCond = localCf.ByClassName("TextBlock").And(localCf.ByAutomationId("Attribution")).And(localCf.ByControlType(ControlType.Text));
+                                                            var tbAttr = t.FindFirstDescendant(tbAttrCond);
+                                                LogConsole($"Attribution found={(tbAttr != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                if (tbAttr != null)
                                                 {
-                                                    foundList.Add(t);
-                                                    LogConsole($"Added FlexibleToastView candidate (Attribution contains 'youtube') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                    var attr = SafeGetName(tbAttr);
+                                                    LogConsole($"Attribution.Name=\"{attr}\" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                    if (!string.IsNullOrEmpty(attr) && attr.IndexOf("youtube", StringComparison.OrdinalIgnoreCase) >= 0)
+                                                    {
+                                                        localFound.Add(t);
+                                                        LogConsole($"Added FlexibleToastView candidate (Attribution contains 'youtube') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                    }
                                                 }
                                             }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            LogConsole("Error while inspecting toast: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                            catch (Exception ex)
+                                            {
+                                                LogConsole("Error while inspecting toast: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    catch (Exception ex)
+                        catch (Exception ex)
+                        {
+                            LogConsole("Exception during CoreWindow path: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                        }
+                        return (localFound, localUsedFallback);
+                    });
+
+                    // Wait up to detectionTimeoutMs for the UIA search to complete
+                    if (searchTask.Wait(detectionTimeoutMs))
                     {
-                        LogConsole("Exception during CoreWindow path: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                        var res = searchTask.Result;
+                        foundList = res.foundLocal;
+                        usedFallback = res.usedFallbackLocal;
+                    }
+                    else
+                    {
+                        LogConsole($"CoreWindow search timed out after {detectionTimeoutMs}ms; skipping this scan to avoid long blocking. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                        logger.Debug($"CoreWindow search timed out after {detectionTimeoutMs}ms and was cancelled for this poll (durationMs={detectionTimeoutMs})");
+                        foundList = new List<FlaUI.Core.AutomationElements.AutomationElement>();
+                        usedFallback = false;
+
+                        // Attempt to reinitialize UIA automation after a timeout. Run InitializeAutomation() with the same timeout.
+                        var reinitSw = System.Diagnostics.Stopwatch.StartNew();
+                        var reinitTask = Task.Run(() =>
+                        {
+                            try
+                            {
+                                InitializeAutomation();
+                                return true;
+                            }
+                            catch (Exception ex)
+                            {
+                                try { logger.Error($"UIA reinitialization failed: {ex.Message}"); } catch { }
+                                return false;
+                            }
+                        });
+
+                        bool reinitCompleted = reinitTask.Wait(detectionTimeoutMs);
+                        reinitSw.Stop();
+                        if (reinitCompleted && reinitTask.Result)
+                        {
+                            LogConsole($"UIA reinitialization completed in {reinitSw.ElapsedMilliseconds}ms");
+                            logger.Info($"UIA reinitialized in {reinitSw.ElapsedMilliseconds}ms after search timeout");
+                        }
+                        else
+                        {
+                            LogConsole($"UIA reinitialization timed out after {detectionTimeoutMs}ms; will wait until next poll before retrying.");
+                            logger.Debug($"UIA reinitialization timed out after {detectionTimeoutMs}ms");
+                            // Wait a small backoff equal to detection timeout to avoid immediate retry
+                            try { Thread.Sleep(detectionTimeoutMs); } catch { }
+                        }
                     }
 
                     // Use only CoreWindow->ScrollViewer->FlexibleToastView discovery results; no heavy fallbacks
@@ -458,7 +569,7 @@ namespace ToastCloser
                                             LogConsole($"key={key} Opening Action Center to preserve history for {dedup.Count} toasts: {summary}");
                                             logger.Info($"key={key} Opening Action Center to preserve history for {dedup.Count} toasts: {summary}");
 
-                                            ToggleActionCenterViaWinA();
+                                            ToggleActionCenterViaWinA(winADelayMs);
                                             LogConsole($"key={key} Action Center toggled (preserve-history)");
                                             logger.Info($"key={key} Action Center toggled (preserve-history)");
 
@@ -748,7 +859,10 @@ namespace ToastCloser
         // Console output helper that prefixes the human-friendly timestamp
         private static void LogConsole(string m)
         {
-            Console.WriteLine($"{DateTime.Now:yyyy/MM/dd HH:mm:ss} {m}");
+            var line = $"{DateTime.Now:yyyy/MM/dd HH:mm:ss} {m}";
+            Console.WriteLine(line);
+            // Also write the same message to the shared SimpleLogger at DEBUG level
+            try { SimpleLogger.Instance?.Debug(m); } catch { }
         }
 
         class TrackedInfo
@@ -811,6 +925,15 @@ namespace ToastCloser
                 inputs[3].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
 
                 NativeMethods.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
+                // Log timestamp with millisecond precision for each Win+A send
+                try
+                {
+                    var ts = DateTime.Now;
+                    var msg = $"Sent Win+A #{i+1}/{sends} (at {ts:HH:mm:ss.fff})";
+                    // Use LogConsole so the message is written to both console and logger consistently
+                    try { LogConsole(msg); } catch { }
+                }
+                catch { }
                 Thread.Sleep(waitMs);
             }
         }
@@ -906,11 +1029,15 @@ namespace ToastCloser
 
         class SimpleLogger : IDisposable
         {
+            public static SimpleLogger? Instance { get; set; }
             private readonly object _lock = new object();
             private readonly System.IO.StreamWriter _writer;
             public SimpleLogger(string path)
             {
-                _writer = new System.IO.StreamWriter(path, append: true) { AutoFlush = true };
+                // Open the file with shared read/write so other writers (e.g., File.AppendAllText)
+                // can append concurrently for diagnostic entries.
+                var fs = new System.IO.FileStream(path, System.IO.FileMode.Append, System.IO.FileAccess.Write, System.IO.FileShare.ReadWrite);
+                _writer = new System.IO.StreamWriter(fs) { AutoFlush = true };
                 Info($"===== log start: {DateTime.Now:yyyy/MM/dd HH:mm:ss} =====");
             }
             public void Info(string m) => Write("INFO", m);
