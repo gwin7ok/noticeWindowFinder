@@ -138,16 +138,16 @@ namespace ToastCloser
                     {
                         // try CoreWindow by name '新しい通知' first
                         var coreByNameCond = cf.ByClassName("Windows.UI.Core.CoreWindow").And(cf.ByName("新しい通知"));
-                        // Fast native pre-check: enumerate top-level HWNDs to see if a CoreWindow with title '新しい通知' exists.
-                        // This avoids calling UIA desktop.FindFirstDescendant which can block for seconds when provider is unresponsive.
-                        var preMs = (DateTime.UtcNow - searchStart).TotalMilliseconds;
-                        bool nativeFound = IsCoreNotificationWindowPresentNative();
-                        LogConsole($"Native EnumWindows check for CoreWindow(Name='新しい通知') found={nativeFound} (elapsed={preMs:0.0}ms)");
+                        // Direct UIA search for CoreWindow by name (do not rely on native EnumWindows pre-check).
                         AutomationElement? coreElement = null;
-                        if (nativeFound)
+                        try
                         {
-                            LogConsole($"Calling desktop.FindFirstDescendant(CoreWindow by name) (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                            coreElement = desktop.FindFirstDescendant(coreByNameCond);
+                            LogConsole($"Calling desktop.FindFirstChild(CoreWindow by name) (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                            coreElement = desktop.FindFirstChild(coreByNameCond);
+                        }
+                        catch (Exception ex)
+                        {
+                            LogConsole("Exception during UIA CoreWindow search: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                         }
                         LogConsole($"CoreWindow found={(coreElement != null)} (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
 
