@@ -117,31 +117,79 @@ class Program
                 long findCallMs = 0;
                 int attempt = 0;
                 bool foundAttempt = false;
+                long hwndVal = 0;
+                long propSwMs = 0;
 
                 while (attempt <= maxReinitRetries)
                 {
                     attempt++;
-                    var findSw = System.Diagnostics.Stopwatch.StartNew();
+                    long scheduleMs = 0; long waitMs = 0; long resultMs = 0;
                     try
                     {
                         // Run Find on threadpool and wait with timeout
                         var localDesktop = desktop!; // capture
-                        Console.WriteLine($"  Attempt {attempt}: starting FindFirstDescendant (3s timeout)...");
-                        var task = System.Threading.Tasks.Task.Run(() => localDesktop.FindFirstDescendant(cond));
+                        Console.WriteLine($"  Attempt {attempt}: scheduling FindFirstChild task...");
+
+                        var schedSw = System.Diagnostics.Stopwatch.StartNew();
+                        var task = System.Threading.Tasks.Task.Run(() => {
+                            // Use FlaUI to search only direct children of the desktop (TreeScope.Children equivalent).
+                            var swInner = System.Diagnostics.Stopwatch.StartNew();
+                            FlaUI.Core.AutomationElements.AutomationElement foundEl = null;
+                            try
+                            {
+                                foundEl = localDesktop.FindFirstChild(cond);
+                            }
+                            catch { }
+                            swInner.Stop();
+                            long workerFindMs = swInner.ElapsedMilliseconds;
+
+                            long workerPropMs = 0; string workerName = string.Empty; string workerClass = string.Empty; long workerHwnd = 0;
+                            if (foundEl != null)
+                            {
+                                try
+                                {
+                                    var hwndObj = foundEl.Properties.NativeWindowHandle.ValueOrDefault;
+                                    workerHwnd = hwndObj != null ? Convert.ToInt64(hwndObj) : 0;
+                                }
+                                catch { }
+                                try { workerName = foundEl.Properties.Name.ValueOrDefault ?? string.Empty; } catch { }
+                                try { workerClass = foundEl.ClassName ?? string.Empty; } catch { }
+                                // prop read time not measured separately here; keep 0 or measure if needed
+                            }
+
+                            return (found: foundEl != null, findMs: workerFindMs, propMs: workerPropMs, name: workerName, cls: workerClass, hwnd: workerHwnd);
+                        });
+                        schedSw.Stop();
+                        scheduleMs = schedSw.ElapsedMilliseconds;
+                        Console.WriteLine($"  Attempt {attempt}: task scheduled (scheduleTime={scheduleMs}ms). Now waiting up to 3000ms for completion...");
+
+                        var waitSw = System.Diagnostics.Stopwatch.StartNew();
                         bool completed = task.Wait(TimeSpan.FromSeconds(3));
-                        Console.WriteLine($"  Attempt {attempt}: FindFirstDescendant returned completed={completed}");
-                        findSw.Stop();
-                        findCallMs = findSw.ElapsedMilliseconds;
+                        waitSw.Stop();
+                        waitMs = waitSw.ElapsedMilliseconds;
+                        Console.WriteLine($"  Attempt {attempt}: wait finished (waitTime={waitMs}ms) completed={completed}");
+
                         if (completed)
                         {
-                            try { el = task.Result; } catch (AggregateException ae) { findEx = ae.Flatten().InnerException ?? ae; }
-                            foundAttempt = el != null;
-                            break; // either found or not found but completed quickly
+                            var result = task.Result;
+                            resultMs = 0; // measured inside task
+                            foundAttempt = result.found;
+                            Console.WriteLine($"  Attempt {attempt}: worker-findTime={result.findMs}ms worker-propTime={result.propMs}ms found={result.found}");
+                            if (result.found)
+                            {
+                                // populate el info for later prop logging
+                                try { hwndVal = result.hwnd; propSwMs = (int)result.propMs; } catch { }
+                                Console.WriteLine($"  Worker captured element Name='{result.name}' Class='{result.cls}' NativeWindowHandle=0x{result.hwnd:X}");
+                            }
+                            // record combined find-call time as sum of parts (schedule+wait)
+                            findCallMs = scheduleMs + waitMs;
+                            break;
                         }
                         else
                         {
                             // Timeout: log, dispose and reinit then retry
-                            Console.WriteLine($"  Find call timed out after 3000ms. Reinitializing UIA (attempt {attempt}/{maxReinitRetries + 1})");
+                            findCallMs = scheduleMs + waitMs;
+                            Console.WriteLine($"  Attempt {attempt}: Find call timed out after {waitMs}ms (>=3000ms). Reinitializing UIA (attempt {attempt}/{maxReinitRetries + 1})");
                             try { automation?.Dispose(); } catch { }
                             automation = null; cf = null; desktop = null;
                             System.Threading.Thread.Sleep(200);
@@ -152,30 +200,24 @@ class Program
                     }
                     catch (Exception ex)
                     {
-                        findSw.Stop();
-                        findCallMs = findSw.ElapsedMilliseconds;
+                        findCallMs = scheduleMs + waitMs + resultMs;
                         findEx = ex;
+                        Console.WriteLine($"  Attempt {attempt}: exception during Find attempt: {ex.GetType().Name}: {ex.Message}");
                         break;
                     }
                 }
 
-                long propSwMs = 0;
-                long hwndVal = 0;
-                if (el != null)
+                if (foundAttempt)
                 {
-                    Console.WriteLine("  Reading properties from found element...");
-                    var propSw = System.Diagnostics.Stopwatch.StartNew();
-                    try { hwndVal = Convert.ToInt64(el.Properties.NativeWindowHandle.ValueOrDefault); } catch { }
-                    propSw.Stop();
-                    propSwMs = propSw.ElapsedMilliseconds;
-                    Console.WriteLine($"  FlaUI: Found element Name='{el.Properties.Name.ValueOrDefault}' Class='{el.ClassName}' NativeWindowHandle=0x{hwndVal:X} (propRead={propSwMs}ms)");
+                    // Worker already captured properties; use those values.
+                    Console.WriteLine($"  FlaUI: Found element NativeWindowHandle=0x{hwndVal:X} (propRead={propSwMs}ms)");
                 }
 
                 trialOverallSw.Stop();
                 times.Add(trialOverallSw.ElapsedMilliseconds);
-                if (el != null) foundCount++;
+                if (foundAttempt) foundCount++;
 
-                Console.WriteLine($"Trial {i+1}/{trials}: found={el != null} overall={trialOverallSw.ElapsedMilliseconds}ms condBuild={condSw.ElapsedMilliseconds}ms findCall={findCallMs}ms propRead={propSwMs}ms");
+                Console.WriteLine($"Trial {i+1}/{trials}: found={foundAttempt} overall={trialOverallSw.ElapsedMilliseconds}ms condBuild={condSw.ElapsedMilliseconds}ms findCall={findCallMs}ms propRead={propSwMs}ms");
                 if (findEx != null) Console.WriteLine($"  Find exception: {findEx.GetType().Name}: {findEx.Message}");
             }
             catch (Exception ex)
@@ -810,7 +852,7 @@ class Program
             var cf = new ConditionFactory(new UIA3PropertyLibrary());
             var desktop = automation.GetDesktop();
             var cond = cf.ByClassName(className).And(cf.ByName(targetName));
-            var el = desktop.FindFirstDescendant(cond);
+            var el = desktop.FindFirstChild(cond);
             if (el != null)
             {
                 long hwnd = Convert.ToInt64(el.Properties.NativeWindowHandle.ValueOrDefault);
