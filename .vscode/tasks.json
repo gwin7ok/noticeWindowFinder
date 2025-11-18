@@ -35,9 +35,10 @@
         "--display-limit-seconds=10",
         "--poll-interval-seconds=2",
         "--preserve-history",
+        "--preserve-history-mode=quicksetting",
         "--preserve-history-idle-ms=2000",
         "--detection-timeout-ms=1000",
-        "--win-a-delay-ms=200",
+        "--win-shortcutkey-delay-ms=200",
         "--skip-fallback"
       ],
       "presentation": {

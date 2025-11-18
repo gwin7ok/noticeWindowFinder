@@ -3,7 +3,7 @@ param(
 )
 $proj = 'g:\Cursor_Folder\noticeWindowFinder\csharp\ToastCloser\ToastCloser.csproj'
 Write-Output "Starting ToastCloser (displayLimitSeconds=1) for $RunSeconds seconds..."
-$p = Start-Process -FilePath 'dotnet' -ArgumentList @('run','--project',$proj,'--','--display-limit-seconds=1','--poll-interval-seconds=30','--preserve-history','--preserve-history-idle-ms=2000','--detection-timeout-ms=1000','--win-a-delay-ms=300') -PassThru
+$p = Start-Process -FilePath 'dotnet' -ArgumentList @('run','--project',$proj,'--','--display-limit-seconds=1','--poll-interval-seconds=30','--preserve-history','--preserve-history-idle-ms=2000','--detection-timeout-ms=1000','--win-shortcutkey-delay-ms=300') -PassThru
 Start-Sleep -Seconds 1
 
 # send BurntToast

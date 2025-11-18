@@ -92,17 +92,33 @@ namespace ToastCloser
                 argList = argList.Where(a => !a.StartsWith("--detection-timeout-ms=")).ToList();
             }
 
-            // allow optional Win+A delay override: --win-a-delay-ms=ms (default 300ms)
+            // allow optional shortcut key delay override: --win-shortcutkey-delay-ms=ms (default 300ms)
             int winADelayMs = 300;
-            var winADelayArg = argList.FirstOrDefault(a => a.StartsWith("--win-a-delay-ms="));
+            var winADelayArg = argList.FirstOrDefault(a => a.StartsWith("--win-shortcutkey-delay-ms="));
             if (!string.IsNullOrEmpty(winADelayArg))
             {
                 var part = winADelayArg.Split('=');
                 if (part.Length == 2 && int.TryParse(part[1], out var v)) winADelayMs = Math.Max(0, v);
-                argList = argList.Where(a => !a.StartsWith("--win-a-delay-ms=")).ToList();
+                argList = argList.Where(a => !a.StartsWith("--win-shortcutkey-delay-ms=")).ToList();
             }
 
-            LogConsole($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMs={detectionTimeoutMs} winADelayMs={winADelayMs})");
+            // preserve-history-mode: select which shortcut/mode to use when preserveHistory is active
+            // values: "noticecenter" (default) => Win+N / Windows.UI.Core.CoreWindow (通知センター)
+            //         "quicksetting" => Win+A / ControlCenterWindow (クイック設定)
+            string preserveHistoryMode = "noticecenter";
+            var phmArg = argList.FirstOrDefault(a => a.StartsWith("--preserve-history-mode="));
+            if (!string.IsNullOrEmpty(phmArg))
+            {
+                var part = phmArg.Split('=');
+                if (part.Length == 2 && !string.IsNullOrEmpty(part[1]))
+                {
+                    var v = part[1].ToLowerInvariant();
+                    if (v == "quicksetting" || v == "noticecenter") preserveHistoryMode = v;
+                }
+                argList = argList.Where(a => !a.StartsWith("--preserve-history-mode=")).ToList();
+            }
+
+            LogConsole($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} preserveHistoryMode={preserveHistoryMode} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMs={detectionTimeoutMs} winADelayMs={winADelayMs})");
 
             var tracked = new Dictionary<string, TrackedInfo>();
             var groups = new Dictionary<int, DateTime>();
@@ -583,9 +599,21 @@ namespace ToastCloser
                                             LogConsole($"key={key} Opening Action Center to preserve history for {dedup.Count} toasts: {summary}");
                                             logger.Info($"key={key} Opening Action Center to preserve history for {dedup.Count} toasts: {summary}");
 
-                                            ToggleActionCenterViaWinA(winADelayMs);
-                                            LogConsole($"key={key} Action Center toggled (preserve-history)");
-                                            logger.Info($"key={key} Action Center toggled (preserve-history)");
+                                            // Choose preserve-history toggle mode based on preserveHistoryMode
+                                            if (string.Equals(preserveHistoryMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                // Win+N -> Notification Center
+                                                ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winADelayMs);
+                                                LogConsole($"key={key} Notification Center toggled (preserve-history)");
+                                                logger.Info($"key={key} Notification Center toggled (preserve-history)");
+                                            }
+                                            else
+                                            {
+                                                // default: Win+A -> Quick Settings / Action Center
+                                                ToggleShortcutWithDetection('A', IsActionCenterOpen, winADelayMs);
+                                                LogConsole($"key={key} Action Center toggled (preserve-history)");
+                                                logger.Info($"key={key} Action Center toggled (preserve-history)");
+                                            }
 
                                             // mark all present toasts as closed by preserve-history and remove from tracked
                                             foreach (var d in dedup)
@@ -882,41 +910,62 @@ namespace ToastCloser
             }
         }
 
-        private static void ToggleActionCenterViaWinA(int waitMs = 700)
+        private static bool IsNotificationCenterOpen()
         {
-            // Determine how many toggles to send based on whether Action Center already open
-            bool alreadyOpen = IsActionCenterOpen();
-            int sends = alreadyOpen ? 3 : 2; // if already open: close->open->close; if closed: open->close
+            try
+            {
+                using var automation = new UIA3Automation();
+                var cf = new ConditionFactory(new UIA3PropertyLibrary());
+                var desktop = automation.GetDesktop();
+                var cond = cf.ByClassName("Windows.UI.Core.CoreWindow").And(cf.ByName("通知センター"));
+                var el = desktop.FindFirstChild(cond);
+                return el != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void ToggleShortcutWithDetection(char keyChar, Func<bool> isOpenFunc, int waitMs = 700)
+        {
+            bool alreadyOpen = false;
+            try { alreadyOpen = isOpenFunc(); } catch { alreadyOpen = false; }
+            int sends = alreadyOpen ? 3 : 2;
+            ushort vk = (ushort)char.ToUpperInvariant(keyChar);
             for (int i = 0; i < sends; i++)
             {
                 var inputs = new NativeMethods.INPUT[4];
-                // LWIN down
                 inputs[0].type = NativeMethods.INPUT_KEYBOARD;
-                inputs[0].U.ki.wVk = (ushort)NativeMethods.VK_LWIN;
-                // 'A' down
+                inputs[0].U.ki.wVk = NativeMethods.VK_LWIN;
+
                 inputs[1].type = NativeMethods.INPUT_KEYBOARD;
-                inputs[1].U.ki.wVk = (ushort)NativeMethods.VK_A;
-                // 'A' up
+                inputs[1].U.ki.wVk = vk;
+
                 inputs[2].type = NativeMethods.INPUT_KEYBOARD;
-                inputs[2].U.ki.wVk = (ushort)NativeMethods.VK_A;
+                inputs[2].U.ki.wVk = vk;
                 inputs[2].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
-                // LWIN up
+
                 inputs[3].type = NativeMethods.INPUT_KEYBOARD;
-                inputs[3].U.ki.wVk = (ushort)NativeMethods.VK_LWIN;
+                inputs[3].U.ki.wVk = NativeMethods.VK_LWIN;
                 inputs[3].U.ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
 
                 NativeMethods.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.INPUT)));
-                // Log timestamp with millisecond precision for each Win+A send
                 try
                 {
                     var ts = DateTime.Now;
-                    var msg = $"Sent Win+A #{i+1}/{sends} (at {ts:HH:mm:ss.fff})";
-                    // Use LogConsole so the message is written to both console and logger consistently
-                    try { LogConsole(msg); } catch { }
+                    var msg = $"Sent Win+{char.ToUpperInvariant(keyChar)} #{i+1}/{sends} (at {ts:HH:mm:ss.fff})";
+                    LogConsole(msg);
                 }
                 catch { }
                 Thread.Sleep(waitMs);
             }
+        }
+
+        private static void ToggleActionCenterViaWinA(int waitMs = 700)
+        {
+            // Backwards-compatible wrapper that toggles Action Center via Win+A
+            ToggleShortcutWithDetection('A', IsActionCenterOpen, waitMs);
         }
 
         private static uint GetIdleMilliseconds()
