@@ -877,28 +877,21 @@ namespace ToastCloser
         // Action Center helper: detect if Action Center window is present and toggle it via Win+A using SendInput
         private static bool IsActionCenterOpen()
         {
-            var open = false;
-            NativeMethods.EnumWindows((h, l) => {
-                try
-                {
-                    if (!NativeMethods.IsWindowVisible(h)) return true;
-                    // check class name
-                    var className = new System.Text.StringBuilder(256);
-                    var clen = NativeMethods.GetClassName(h, className, className.Capacity);
-                    if (clen > 0)
-                    {
-                        var cls = className.ToString();
-                        if (string.Equals(cls, "ControlCenterWindow", StringComparison.OrdinalIgnoreCase))
-                        {
-                            open = true;
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-                catch { return true; }
-            }, IntPtr.Zero);
-            return open;
+            // Use UIA direct-desktop child lookup (more reliable than EnumWindows in some cases)
+            try
+            {
+                using var automation = new UIA3Automation();
+                var cf = new ConditionFactory(new UIA3PropertyLibrary());
+                var desktop = automation.GetDesktop();
+                var cond = cf.ByClassName("ControlCenterWindow").And(cf.ByName("クイック設定"));
+                var el = desktop.FindFirstChild(cond);
+                return el != null;
+            }
+            catch
+            {
+                // Fall back to conservative false on any error
+                return false;
+            }
         }
 
         private static void ToggleActionCenterViaWinA(int waitMs = 700)
