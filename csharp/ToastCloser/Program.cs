@@ -139,6 +139,8 @@ namespace ToastCloser
             var logger = new SimpleLogger(logPath);
             // expose logger for static helpers to use when writing diagnostic entries
             SimpleLogger.Instance = logger;
+            // If verbose flag set, echo DEBUG-level entries to console as well
+            SimpleLogger.EchoDebugToConsole = _verboseLog;
 
             // UIA automation instances are reinitializable on timeout. Keep them in mutable variables
             UIA3Automation? automation = new UIA3Automation();
@@ -1274,6 +1276,8 @@ namespace ToastCloser
         class SimpleLogger : IDisposable
         {
             public static SimpleLogger? Instance { get; set; }
+            // When true, DEBUG messages will also be written to Console
+            public static bool EchoDebugToConsole = false;
             private readonly object _lock = new object();
             private readonly System.IO.StreamWriter _writer;
             public SimpleLogger(string path)
@@ -1285,7 +1289,14 @@ namespace ToastCloser
                 Info($"===== log start: {DateTime.Now:yyyy/MM/dd HH:mm:ss} =====");
             }
             public void Info(string m) => Write("INFO", m);
-            public void Debug(string m) => Write("DEBUG", m);
+            public void Debug(string m)
+            {
+                Write("DEBUG", m);
+                if (EchoDebugToConsole)
+                {
+                    try { Console.WriteLine($"{DateTime.Now:yyyy/MM/dd HH:mm:ss} [DEBUG] {m}"); } catch { }
+                }
+            }
             public void Error(string m) => Write("ERROR", m);
             private void Write(string level, string m)
             {
