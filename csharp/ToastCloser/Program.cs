@@ -154,6 +154,11 @@ namespace ToastCloser
                 argList = argList.Where(a => !a.StartsWith("--preserve-history-mode=")).ToList();
             }
 
+            // If the legacy --skip-fallback flag is present, warn that it's currently unused
+            if (skipFallback)
+            {
+                Logger.Instance?.Warn("Option --skip-fallback was specified but there are no fallback search paths enabled; this option is currently unused and will be ignored.");
+            }
             Logger.Instance?.Info($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} preserveHistoryMode={preserveHistoryMode} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMs={detectionTimeoutMs} winADelayMs={winADelayMs})");
 
             var tracked = new Dictionary<string, TrackedInfo>();
