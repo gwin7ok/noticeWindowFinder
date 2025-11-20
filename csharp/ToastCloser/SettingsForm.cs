@@ -70,28 +70,28 @@ namespace ToastCloser
         private void InitializeComponent()
         {
             // Larger layout so labels and inputs are not truncated
-            this.txtDisplayLimit = new TextBox() { Left = 280, Top = 20, Width = 120 };
-            this.txtPollInterval = new TextBox() { Left = 280, Top = 60, Width = 120 };
+            this.txtDisplayLimit = new TextBox() { Left = 380, Top = 20, Width = 140 };
+            this.txtPollInterval = new TextBox() { Left = 380, Top = 60, Width = 140 };
             this.chkDetectOnly = new CheckBox() { Left = 20, Top = 100, Text = "検出のみ (DetectOnly)", AutoSize = true };
-            this.txtIdleMs = new TextBox() { Left = 320, Top = 180, Width = 80 };
-            this.txtMaxMonitorSeconds = new TextBox() { Left = 320, Top = 220, Width = 80 };
-            this.txtDetectionTimeoutMs = new TextBox() { Left = 320, Top = 260, Width = 80 };
-            this.txtWinShortcutKeyDelayMs = new TextBox() { Left = 320, Top = 300, Width = 80 };
-            this.cmbPreserveHistoryMode = new ComboBox() { Left = 320, Top = 140, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
+            this.cmbPreserveHistoryMode = new ComboBox() { Left = 380, Top = 140, Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
             this.cmbPreserveHistoryMode.Items.AddRange(new object[] { "noticecenter", "quicksetting" });
+            this.txtIdleMs = new TextBox() { Left = 380, Top = 180, Width = 140 };
+            this.txtMaxMonitorSeconds = new TextBox() { Left = 380, Top = 220, Width = 140 };
+            this.txtDetectionTimeoutMs = new TextBox() { Left = 380, Top = 260, Width = 140 };
+            this.txtWinShortcutKeyDelayMs = new TextBox() { Left = 380, Top = 300, Width = 140 };
             this.chkVerbose = new CheckBox() { Left = 20, Top = 340, Text = "VerboseLog", AutoSize = true };
-            this.btnSave = new Button() { Text = "保存", Left = 140, Width = 100, Top = 260 };
-            this.btnCancel = new Button() { Text = "キャンセル", Left = 260, Width = 100, Top = 260 };
+            this.btnSave = new Button() { Text = "保存", Left = 200, Width = 100, Top = 380 };
+            this.btnCancel = new Button() { Text = "キャンセル", Left = 320, Width = 140, Top = 380 };
 
             var lbl1 = new Label() { Left = 20, Top = 22, Width = 250, Text = "DisplayLimitSeconds:" , AutoSize = false};
             var lbl2 = new Label() { Left = 20, Top = 62, Width = 250, Text = "PollIntervalSeconds:", AutoSize = false };
-            var lbl3 = new Label() { Left = 20, Top = 182, Width = 290, Text = "PreserveHistoryIdleMs:", AutoSize = false };
-            var lbl4 = new Label() { Left = 20, Top = 222, Width = 290, Text = "PreserveHistoryMaxMonitorSeconds:", AutoSize = false };
-            var lbl5 = new Label() { Left = 20, Top = 262, Width = 290, Text = "DetectionTimeoutMs:", AutoSize = false };
-            var lbl6 = new Label() { Left = 20, Top = 302, Width = 290, Text = "WinShortcutKeyDelayMs:", AutoSize = false };
-            var lblMode = new Label() { Left = 20, Top = 142, Width = 290, Text = "PreserveHistoryMode:", AutoSize = false };
+            var lbl3 = new Label() { Left = 20, Top = 182, Width = 340, Text = "PreserveHistoryIdleMs:", AutoSize = false };
+            var lbl4 = new Label() { Left = 20, Top = 222, Width = 340, Text = "PreserveHistoryMaxMonitorSeconds:", AutoSize = false };
+            var lbl5 = new Label() { Left = 20, Top = 262, Width = 340, Text = "DetectionTimeoutMs:", AutoSize = false };
+            var lbl6 = new Label() { Left = 20, Top = 302, Width = 340, Text = "WinShortcutKeyDelayMs:", AutoSize = false };
+            var lblMode = new Label() { Left = 20, Top = 142, Width = 340, Text = "PreserveHistoryMode:", AutoSize = false };
 
-            this.ClientSize = new System.Drawing.Size(520, 420);
+            this.ClientSize = new System.Drawing.Size(760, 460);
             this.Controls.AddRange(new Control[] { lbl1, lbl2, lblMode, lbl3, lbl4, lbl5, lbl6, txtDisplayLimit, txtPollInterval, cmbPreserveHistoryMode, txtIdleMs, txtMaxMonitorSeconds, txtDetectionTimeoutMs, txtWinShortcutKeyDelayMs, chkDetectOnly, chkVerbose, btnSave, btnCancel });
             this.Text = "ToastCloser 設定";
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
