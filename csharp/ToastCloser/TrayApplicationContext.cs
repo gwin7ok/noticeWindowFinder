@@ -8,6 +8,7 @@ namespace ToastCloser
     public class TrayApplicationContext : ApplicationContext
     {
         private NotifyIcon _trayIcon;
+        private ContextMenuStrip _menu;
         private Config _config;
         private SettingsForm? _settingsForm;
         private ConsoleForm? _consoleForm;
@@ -27,7 +28,7 @@ namespace ToastCloser
                 Visible = true
             };
 
-            var menu = new ContextMenuStrip();
+            _menu = new ContextMenuStrip();
             var settingsItem = new ToolStripMenuItem("設定...");
             settingsItem.Click += (s, e) => ShowSettings();
             var consoleItem = new ToolStripMenuItem("コンソールを表示");
@@ -37,17 +38,63 @@ namespace ToastCloser
             var exitItem = new ToolStripMenuItem("終了");
             exitItem.Click += (s, e) => ExitApplication();
 
-            menu.Items.Add(settingsItem);
-            menu.Items.Add(consoleItem);
-            menu.Items.Add(reloadItem);
-            menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(exitItem);
+            _menu.Items.Add(settingsItem);
+            _menu.Items.Add(consoleItem);
+            _menu.Items.Add(reloadItem);
+            _menu.Items.Add(new ToolStripSeparator());
+            _menu.Items.Add(exitItem);
 
-            _trayIcon.ContextMenuStrip = menu;
+            // Do not assign ContextMenuStrip directly; show it manually so we can control position
             _trayIcon.DoubleClick += (s, e) => ToggleConsole();
+            _trayIcon.MouseUp += TrayIcon_MouseUp;
 
             // Show a balloon tip on first run
             try { _trayIcon.ShowBalloonTip(2000, "ToastCloser", "Tray mode: 右クリックで設定・コンソールを開けます", ToolTipIcon.Info); } catch { }
+        }
+
+        private void TrayIcon_MouseUp(object? sender, MouseEventArgs e)
+        {
+            try
+            {
+                if (e.Button != MouseButtons.Right) return;
+                var cursorPos = Cursor.Position;
+                var screen = Screen.FromPoint(cursorPos);
+                var working = screen.WorkingArea;
+                var bounds = screen.Bounds;
+
+                // Preferred size for menu
+                var menuSize = _menu.GetPreferredSize(Size.Empty);
+                int menuW = menuSize.Width;
+                int menuH = menuSize.Height;
+
+                bool taskbarAtTop = working.Top > bounds.Top;
+
+                int x = cursorPos.X;
+                int y = cursorPos.Y;
+
+                int spaceBelow = working.Bottom - cursorPos.Y;
+                int spaceAbove = cursorPos.Y - working.Top;
+
+                if (taskbarAtTop)
+                {
+                    // prefer showing below cursor
+                    if (spaceBelow >= menuH) y = cursorPos.Y + 10;
+                    else y = Math.Max(working.Top, working.Bottom - menuH);
+                }
+                else
+                {
+                    // prefer showing above cursor
+                    if (spaceAbove >= menuH) y = cursorPos.Y - menuH;
+                    else if (spaceBelow >= menuH) y = cursorPos.Y + 10;
+                    else y = Math.Max(working.Top, working.Bottom - menuH);
+                }
+
+                if (x + menuW > working.Right) x = Math.Max(working.Left, working.Right - menuW);
+                if (x < working.Left) x = working.Left;
+
+                _menu.Show(x, y);
+            }
+            catch { }
         }
 
         private void ShowSettings()
