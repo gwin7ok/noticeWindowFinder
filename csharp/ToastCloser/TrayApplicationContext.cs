@@ -50,6 +50,18 @@ namespace ToastCloser
             // Assign ContextMenuStrip to the tray icon so default closing behaviour remains (we cancel Opening and show manually)
             _trayIcon.ContextMenuStrip = _menu;
             _trayIcon.DoubleClick += (s, e) => ToggleConsole();
+            // Middle-click the tray icon to exit (same as selecting "終了" from the menu)
+            _trayIcon.MouseClick += (s, e) =>
+            {
+                try
+                {
+                    if (e is MouseEventArgs me && me.Button == MouseButtons.Middle)
+                    {
+                        ExitApplication();
+                    }
+                }
+                catch { }
+            };
 
             // Show a balloon tip on first run
             try { _trayIcon.ShowBalloonTip(2000, "ToastCloser", "Tray mode: 右クリックで設定・コンソールを開けます", ToolTipIcon.Info); } catch { }
