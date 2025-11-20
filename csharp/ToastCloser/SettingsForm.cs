@@ -20,7 +20,6 @@ namespace ToastCloser
             txtDisplayLimit.Text = _config.DisplayLimitSeconds.ToString();
             txtPollInterval.Text = _config.PollIntervalSeconds.ToString();
             chkDetectOnly.Checked = _config.DetectOnly;
-            chkPreserveHistory.Checked = _config.PreserveHistory;
             txtIdleMs.Text = _config.PreserveHistoryIdleMs.ToString();
             chkVerbose.Checked = _config.VerboseLog;
         }
@@ -30,7 +29,6 @@ namespace ToastCloser
             double.TryParse(txtDisplayLimit.Text, out var d); _config.DisplayLimitSeconds = d;
             double.TryParse(txtPollInterval.Text, out var p); _config.PollIntervalSeconds = p;
             _config.DetectOnly = chkDetectOnly.Checked;
-            _config.PreserveHistory = chkPreserveHistory.Checked;
             int.TryParse(txtIdleMs.Text, out var im); _config.PreserveHistoryIdleMs = im;
             _config.VerboseLog = chkVerbose.Checked;
         }
@@ -53,7 +51,6 @@ namespace ToastCloser
         private TextBox txtPollInterval = null!;
         private TextBox txtIdleMs = null!;
         private CheckBox chkDetectOnly = null!;
-        private CheckBox chkPreserveHistory = null!;
         private CheckBox chkVerbose = null!;
         private Button btnSave = null!;
         private Button btnCancel = null!;
@@ -64,7 +61,6 @@ namespace ToastCloser
             this.txtDisplayLimit = new TextBox() { Left = 280, Top = 20, Width = 120 };
             this.txtPollInterval = new TextBox() { Left = 280, Top = 60, Width = 120 };
             this.chkDetectOnly = new CheckBox() { Left = 20, Top = 100, Text = "検出のみ (DetectOnly)", AutoSize = true };
-            this.chkPreserveHistory = new CheckBox() { Left = 20, Top = 140, Text = "PreserveHistory", AutoSize = true };
             this.txtIdleMs = new TextBox() { Left = 280, Top = 180, Width = 120 };
             this.chkVerbose = new CheckBox() { Left = 20, Top = 220, Text = "VerboseLog", AutoSize = true };
             this.btnSave = new Button() { Text = "保存", Left = 140, Width = 100, Top = 260 };
@@ -75,7 +71,7 @@ namespace ToastCloser
             var lbl3 = new Label() { Left = 20, Top = 182, Width = 250, Text = "PreserveHistoryIdleMs:", AutoSize = false };
 
             this.ClientSize = new System.Drawing.Size(520, 340);
-            this.Controls.AddRange(new Control[] { lbl1, lbl2, lbl3, txtDisplayLimit, txtPollInterval, txtIdleMs, chkDetectOnly, chkPreserveHistory, chkVerbose, btnSave, btnCancel });
+            this.Controls.AddRange(new Control[] { lbl1, lbl2, lbl3, txtDisplayLimit, txtPollInterval, txtIdleMs, chkDetectOnly, chkVerbose, btnSave, btnCancel });
             this.Text = "ToastCloser 設定";
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
