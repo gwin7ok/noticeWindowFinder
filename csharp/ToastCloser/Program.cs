@@ -24,22 +24,28 @@ namespace ToastCloser
             // verbose debug logging flag (set via --verbose-log)
             private static bool _verboseLog = false;
 
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             // single-instance check: prevent multiple processes
             try
             {
-                bool createdNew = false;
-                var mutexName = "Global\\noticeWindowFinder_ToastCloser_mutex";
-                var single = new System.Threading.Mutex(true, mutexName, out createdNew);
-                if (!createdNew)
+                var argListCheck = args?.ToString() ?? string.Empty;
+                bool isBackgroundService = false;
+                try { isBackgroundService = args != null && Array.Exists(args, a => string.Equals(a, "--background-service", StringComparison.OrdinalIgnoreCase)); } catch { }
+                if (!isBackgroundService)
                 {
-                    try
+                    bool createdNew = false;
+                    var mutexName = "Global\\noticeWindowFinder_ToastCloser_mutex";
+                    var single = new System.Threading.Mutex(true, mutexName, out createdNew);
+                    if (!createdNew)
                     {
-                        NativeMethods.MessageBoxW(IntPtr.Zero, "ToastCloser is already running.", "ToastCloser", 0x00000040);
+                        try
+                        {
+                            NativeMethods.MessageBoxW(IntPtr.Zero, "ToastCloser is already running.", "ToastCloser", 0x00000040);
+                        }
+                        catch { }
+                        return;
                     }
-                    catch { }
-                    return;
                 }
             }
             catch { }
@@ -1415,9 +1421,10 @@ namespace ToastCloser
             return found;
         }
 
-        class Logger : IDisposable
+        public class Logger : IDisposable
         {
             public static Logger? Instance { get; set; }
+            public event Action<string>? OnLogLine;
             // When true, log file lines will also be written to Console (same format)
             public static bool IsDebugEnabled = false;
             private readonly object _lock = new object();
@@ -1448,6 +1455,7 @@ namespace ToastCloser
                 {
                     try { _writer.WriteLine(line); } catch { }
                     try { Console.WriteLine(line); } catch { }
+                    try { OnLogLine?.Invoke(line); } catch { }
                 }
             }
             public void Dispose() => _writer?.Dispose();
