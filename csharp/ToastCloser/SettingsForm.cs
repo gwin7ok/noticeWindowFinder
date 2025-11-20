@@ -60,20 +60,21 @@ namespace ToastCloser
 
         private void InitializeComponent()
         {
-            this.txtDisplayLimit = new TextBox() { Left = 140, Top = 12, Width = 80 };
-            this.txtPollInterval = new TextBox() { Left = 140, Top = 42, Width = 80 };
-            this.chkDetectOnly = new CheckBox() { Left = 12, Top = 72, Text = "検出のみ (DetectOnly)" };
-            this.chkPreserveHistory = new CheckBox() { Left = 12, Top = 102, Text = "PreserveHistory" };
-            this.txtIdleMs = new TextBox() { Left = 140, Top = 132, Width = 80 };
-            this.chkVerbose = new CheckBox() { Left = 12, Top = 162, Text = "VerboseLog" };
-            this.btnSave = new Button() { Text = "保存", Left = 50, Width = 80, Top = 200 };
-            this.btnCancel = new Button() { Text = "キャンセル", Left = 150, Width = 80, Top = 200 };
+            // Larger layout so labels and inputs are not truncated
+            this.txtDisplayLimit = new TextBox() { Left = 200, Top = 20, Width = 140 };
+            this.txtPollInterval = new TextBox() { Left = 200, Top = 60, Width = 140 };
+            this.chkDetectOnly = new CheckBox() { Left = 20, Top = 100, Text = "検出のみ (DetectOnly)", AutoSize = true };
+            this.chkPreserveHistory = new CheckBox() { Left = 20, Top = 140, Text = "PreserveHistory", AutoSize = true };
+            this.txtIdleMs = new TextBox() { Left = 200, Top = 180, Width = 140 };
+            this.chkVerbose = new CheckBox() { Left = 20, Top = 220, Text = "VerboseLog", AutoSize = true };
+            this.btnSave = new Button() { Text = "保存", Left = 140, Width = 100, Top = 260 };
+            this.btnCancel = new Button() { Text = "キャンセル", Left = 260, Width = 100, Top = 260 };
 
-            var lbl1 = new Label() { Left = 12, Top = 12, Text = "DisplayLimitSeconds:" };
-            var lbl2 = new Label() { Left = 12, Top = 42, Text = "PollIntervalSeconds:" };
-            var lbl3 = new Label() { Left = 12, Top = 132, Text = "PreserveHistoryIdleMs:" };
+            var lbl1 = new Label() { Left = 20, Top = 22, Width = 170, Text = "DisplayLimitSeconds:" };
+            var lbl2 = new Label() { Left = 20, Top = 62, Width = 170, Text = "PollIntervalSeconds:" };
+            var lbl3 = new Label() { Left = 20, Top = 182, Width = 170, Text = "PreserveHistoryIdleMs:" };
 
-            this.ClientSize = new System.Drawing.Size(260, 240);
+            this.ClientSize = new System.Drawing.Size(420, 320);
             this.Controls.AddRange(new Control[] { lbl1, lbl2, lbl3, txtDisplayLimit, txtPollInterval, txtIdleMs, chkDetectOnly, chkPreserveHistory, chkVerbose, btnSave, btnCancel });
             this.Text = "ToastCloser 設定";
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
