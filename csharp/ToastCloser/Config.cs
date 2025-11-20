@@ -11,11 +11,11 @@ namespace ToastCloser
         public double PollIntervalSeconds { get; set; } = 1.0;
         public bool DetectOnly { get; set; } = false;
         public bool PreserveHistory { get; set; } = true;
-        public string PreserveHistoryMode { get; set; } = "noticecenter";
-        public int PreserveHistoryIdleMs { get; set; } = 2000;
-        public int PreserveHistoryMaxMonitorSeconds { get; set; } = 15;
-        public int DetectionTimeoutMs { get; set; } = 2000;
-        public int WinShortcutKeyDelayMs { get; set; } = 300;
+        public string ShortcutKeyMode { get; set; } = "noticecenter";
+        public int ShortcutKeyWaitIdleMS { get; set; } = 2000;
+        public int ShortcutKeyMaxWaitSeconds { get; set; } = 15;
+        public int DetectionTimeoutMS { get; set; } = 2000;
+        public int WinShortcutKeyIntervalMS { get; set; } = 300;
         public bool VerboseLog { get; set; } = false;
 
         public static string ConfigFileName => Path.Combine(AppContext.BaseDirectory, "ToastCloser.ini");
@@ -30,11 +30,11 @@ namespace ToastCloser
                 lines.Add($"PollIntervalSeconds={PollIntervalSeconds.ToString(CultureInfo.InvariantCulture)}");
                 lines.Add($"DetectOnly={DetectOnly}");
                 lines.Add($"PreserveHistory={PreserveHistory}");
-                lines.Add($"PreserveHistoryMode={PreserveHistoryMode}");
-                lines.Add($"PreserveHistoryIdleMs={PreserveHistoryIdleMs}");
-                lines.Add($"PreserveHistoryMaxMonitorSeconds={PreserveHistoryMaxMonitorSeconds}");
-                lines.Add($"DetectionTimeoutMs={DetectionTimeoutMs}");
-                lines.Add($"WinShortcutKeyDelayMs={WinShortcutKeyDelayMs}");
+                lines.Add($"ShortcutKeyMode={ShortcutKeyMode}");
+                lines.Add($"ShortcutKeyWaitIdleMS={ShortcutKeyWaitIdleMS}");
+                lines.Add($"ShortcutKeyMaxWaitSeconds={ShortcutKeyMaxWaitSeconds}");
+                lines.Add($"DetectionTimeoutMS={DetectionTimeoutMS}");
+                lines.Add($"WinShortcutKeyIntervalMS={WinShortcutKeyIntervalMS}");
                 lines.Add($"VerboseLog={VerboseLog}");
                 File.WriteAllLines(ConfigFileName, lines);
             }
@@ -62,11 +62,11 @@ namespace ToastCloser
                         case "PollIntervalSeconds": double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var v2); cfg.PollIntervalSeconds = v2; break;
                         case "DetectOnly": bool.TryParse(val, out var b1); cfg.DetectOnly = b1; break;
                         case "PreserveHistory": bool.TryParse(val, out var b2); cfg.PreserveHistory = b2; break;
-                        case "PreserveHistoryMode": cfg.PreserveHistoryMode = val; break;
-                        case "PreserveHistoryIdleMs": int.TryParse(val, out var i1); cfg.PreserveHistoryIdleMs = i1; break;
-                        case "PreserveHistoryMaxMonitorSeconds": int.TryParse(val, out var i2); cfg.PreserveHistoryMaxMonitorSeconds = i2; break;
-                        case "DetectionTimeoutMs": int.TryParse(val, out var i3); cfg.DetectionTimeoutMs = i3; break;
-                        case "WinShortcutKeyDelayMs": int.TryParse(val, out var i4); cfg.WinShortcutKeyDelayMs = i4; break;
+                        case "ShortcutKeyMode": cfg.ShortcutKeyMode = val; break;
+                        case "ShortcutKeyWaitIdleMS": int.TryParse(val, out var i1); cfg.ShortcutKeyWaitIdleMS = i1; break;
+                        case "ShortcutKeyMaxWaitSeconds": int.TryParse(val, out var i2); cfg.ShortcutKeyMaxWaitSeconds = i2; break;
+                        case "DetectionTimeoutMS": int.TryParse(val, out var i3); cfg.DetectionTimeoutMS = i3; break;
+                        case "WinShortcutKeyIntervalMS": int.TryParse(val, out var i4); cfg.WinShortcutKeyIntervalMS = i4; break;
                         case "VerboseLog": bool.TryParse(val, out var b3); cfg.VerboseLog = b3; break;
                     }
                 }

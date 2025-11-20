@@ -58,113 +58,36 @@ namespace ToastCloser
             bool preserveHistory = true;
             bool wmCloseOnly = false;
             bool skipFallback = false;
-            int preserveHistoryIdleMs = 2000; // default: require 2s idle
-            int preserveHistoryMaxMonitorMs = 15000; // default: 15s max monitoring
+            int shortcutKeyWaitIdleMS = 2000; // default: require 2s idle
+            int shortcutKeyMaxWaitMs = 15000; // default: 15s max monitoring
+            string shortcutKeyMode = "noticecenter";
+            int winShortcutKeyIntervalMS = 300;
             // detection timeout (ms) for UIA searches to avoid long blocking calls after close actions
-            int detectionTimeoutMs = 2000; // default: 2000ms
+            int detectionTimeoutMS = 2000; // default: 2000ms
 
-            // Parse positional args first (min, max, poll) but also allow a named flag --detect-only or --no-auto-close
+            // CLI flags are deprecated: load all settings from `ToastCloser.ini` via `Config`.
             var argList = args?.ToList() ?? new List<string>();
-            if (argList.Contains("--detect-only") || argList.Contains("--no-auto-close"))
-            {
-                detectOnly = true;
-                // remove flag so positional parsing below is simpler
-                argList = argList.Where(a => a != "--detect-only" && a != "--no-auto-close").ToList();
-            }
-            // NOTE: --preserve-history option removed. preserveHistory is now default=true.
-            if (argList.Contains("--verbose-log"))
-            {
-                _verboseLog = true;
-                argList = argList.Where(a => a != "--verbose-log").ToList();
-            }
-            if (argList.Contains("--wm-close-only"))
-            {
-                wmCloseOnly = true;
-                argList = argList.Where(a => a != "--wm-close-only").ToList();
-            }
-            if (argList.Contains("--skip-fallback"))
-            {
-                skipFallback = true;
-                argList = argList.Where(a => a != "--skip-fallback").ToList();
-            }
-            // allow optional idle-ms override: --preserve-history-idle-ms=ms
-            var idleArg = argList.FirstOrDefault(a => a.StartsWith("--preserve-history-idle-ms="));
-            if (!string.IsNullOrEmpty(idleArg))
-            {
-                var part = idleArg.Split('=');
-                if (part.Length == 2 && int.TryParse(part[1], out var v)) preserveHistoryIdleMs = Math.Max(0, v);
-                argList = argList.Where(a => !a.StartsWith("--preserve-history-idle-ms=")).ToList();
-            }
-
-            // optional max monitor time: --preserve-history-max-monitor-seconds=seconds
-            var phMaxArg = argList.FirstOrDefault(a => a.StartsWith("--preserve-history-max-monitor-seconds="));
-            if (!string.IsNullOrEmpty(phMaxArg))
-            {
-                var part = phMaxArg.Split('=');
-                if (part.Length == 2 && double.TryParse(part[1], out var vv)) preserveHistoryMaxMonitorMs = (int)Math.Max(0.0, vv * 1000.0);
-                argList = argList.Where(a => !a.StartsWith("--preserve-history-max-monitor-seconds=")).ToList();
-            }
-
-            // Prefer named options: --display-limit-seconds=, --poll-interval-seconds=
-            var minArg = argList.FirstOrDefault(a => a.StartsWith("--display-limit-seconds="));
-            if (!string.IsNullOrEmpty(minArg))
-            {
-                var part = minArg.Split('=');
-                if (part.Length == 2 && double.TryParse(part[1], out var v)) minSeconds = Math.Max(0.0, v);
-                argList = argList.Where(a => !a.StartsWith("--display-limit-seconds=")).ToList();
-            }
-            var pollArg = argList.FirstOrDefault(a => a.StartsWith("--poll-interval-seconds="));
-            if (!string.IsNullOrEmpty(pollArg))
-            {
-                var part = pollArg.Split('=');
-                if (part.Length == 2 && double.TryParse(part[1], out var v)) poll = Math.Max(0.1, v);
-                argList = argList.Where(a => !a.StartsWith("--poll-interval-seconds=")).ToList();
-            }
-
-            // Positional arguments have been removed. Use named options:
-            // --display-limit-seconds=, --poll-interval-seconds=
-
-            // allow optional detection timeout override: --detection-timeout-ms=ms
-            var detArg = argList.FirstOrDefault(a => a.StartsWith("--detection-timeout-ms="));
-            if (!string.IsNullOrEmpty(detArg))
-            {
-                var part = detArg.Split('=');
-                if (part.Length == 2 && int.TryParse(part[1], out var v)) detectionTimeoutMs = Math.Max(0, v);
-                argList = argList.Where(a => !a.StartsWith("--detection-timeout-ms=")).ToList();
-            }
-
-            // allow optional shortcut key delay override: --win-shortcutkey-delay-ms=ms (default 300ms)
-            int winADelayMs = 300;
-            var winADelayArg = argList.FirstOrDefault(a => a.StartsWith("--win-shortcutkey-delay-ms="));
-            if (!string.IsNullOrEmpty(winADelayArg))
-            {
-                var part = winADelayArg.Split('=');
-                if (part.Length == 2 && int.TryParse(part[1], out var v)) winADelayMs = Math.Max(0, v);
-                argList = argList.Where(a => !a.StartsWith("--win-shortcutkey-delay-ms=")).ToList();
-            }
-
-            // preserve-history-mode: select which shortcut/mode to use when preserveHistory is active
-            // values: "noticecenter" (default) => Win+N / Windows.UI.Core.CoreWindow (通知センター)
-            //         "quicksetting" => Win+A / ControlCenterWindow (クイック設定)
-            string preserveHistoryMode = "noticecenter";
-            var phmArg = argList.FirstOrDefault(a => a.StartsWith("--preserve-history-mode="));
-            if (!string.IsNullOrEmpty(phmArg))
-            {
-                var part = phmArg.Split('=');
-                if (part.Length == 2 && !string.IsNullOrEmpty(part[1]))
-                {
-                    var v = part[1].ToLowerInvariant();
-                    if (v == "quicksetting" || v == "noticecenter") preserveHistoryMode = v;
-                }
-                argList = argList.Where(a => !a.StartsWith("--preserve-history-mode=")).ToList();
-            }
+            var cfg = Config.Load();
+            // Apply config values (unit conversion where necessary)
+            minSeconds = cfg.DisplayLimitSeconds;
+            poll = cfg.PollIntervalSeconds;
+            detectOnly = cfg.DetectOnly;
+            preserveHistory = cfg.PreserveHistory;
+            shortcutKeyMode = cfg.ShortcutKeyMode ?? "noticecenter";
+            shortcutKeyWaitIdleMS = cfg.ShortcutKeyWaitIdleMS;
+            // Config stores max wait in seconds; convert to milliseconds for internal usage
+            shortcutKeyMaxWaitMs = Math.Max(0, cfg.ShortcutKeyMaxWaitSeconds * 1000);
+            detectionTimeoutMS = cfg.DetectionTimeoutMS;
+            winShortcutKeyIntervalMS = cfg.WinShortcutKeyIntervalMS;
+            _verboseLog = cfg.VerboseLog;
+            Logger.IsDebugEnabled = _verboseLog;
 
             // If the legacy --skip-fallback flag is present, warn that it's currently unused
             if (skipFallback)
             {
                 Logger.Instance?.Warn("Option --skip-fallback was specified but there are no fallback search paths enabled; this option is currently unused and will be ignored.");
             }
-            Logger.Instance?.Info($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} preserveHistoryMode={preserveHistoryMode} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMs={detectionTimeoutMs} winADelayMs={winADelayMs})");
+            Logger.Instance?.Info($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} shortcutKeyMode={shortcutKeyMode} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMS={detectionTimeoutMS} winShortcutKeyIntervalMS={winShortcutKeyIntervalMS})");
 
             var tracked = new Dictionary<string, TrackedInfo>();
             var groups = new Dictionary<int, DateTime>();
@@ -235,7 +158,7 @@ namespace ToastCloser
                 {
                     // NOTE: Do NOT perform regular keyboard/mouse polling on every scan.
                     // Monitoring for preserve-history is started only when the oldest tracked
-                    // toast's elapsed time reaches (displayLimitMs - preserveHistoryIdleMs).
+                    // toast's elapsed time reaches (displayLimitMs - shortcutKeyWaitIdleMS).
                     // If monitoring should start, enter the monitoring loop (which performs
                     // immediate poll and then 200ms-interval polling) and block Toast search
                     // until monitoring finishes.
@@ -244,7 +167,7 @@ namespace ToastCloser
                         try
                         {
                             int displayLimitMs = (int)(minSeconds * 1000);
-                            int monitorThresholdMs = Math.Max(0, displayLimitMs - preserveHistoryIdleMs);
+                            int monitorThresholdMs = Math.Max(0, displayLimitMs - shortcutKeyWaitIdleMS);
                             var oldest = tracked.Values.OrderBy(t => t.FirstSeen).FirstOrDefault();
                             if (oldest != null)
                             {
@@ -253,7 +176,7 @@ namespace ToastCloser
                                 {
                                     _monitoringStarted = true;
                                     var monitoringStart = DateTime.UtcNow;
-                                    Logger.Instance?.Info($"Started preserve-history monitoring (oldestElapsedMs={oldestElapsedMs} monitorThresholdMs={monitorThresholdMs} maxMonitorMs={preserveHistoryMaxMonitorMs})");
+                                    Logger.Instance?.Info($"Started preserve-history monitoring (oldestElapsedMs={oldestElapsedMs} monitorThresholdMs={monitorThresholdMs} maxMonitorMs={shortcutKeyMaxWaitMs})");
 
                                     // Immediate one-shot poll to capture very recent input
                                     try
@@ -331,18 +254,18 @@ namespace ToastCloser
                                         {
                                             // Check for max monitor timeout first
                                             var monitorElapsedMs = (int)(DateTime.UtcNow - monitoringStart).TotalMilliseconds;
-                                            if (preserveHistoryMaxMonitorMs > 0 && monitorElapsedMs >= preserveHistoryMaxMonitorMs)
+                                            if (shortcutKeyMaxWaitMs > 0 && monitorElapsedMs >= shortcutKeyMaxWaitMs)
                                             {
-                                                Logger.Instance?.Info($"Preserve-history monitor timed out after {monitorElapsedMs}ms (max {preserveHistoryMaxMonitorMs}ms); proceeding to send shortcut");
+                                                Logger.Instance?.Info($"Preserve-history monitor timed out after {monitorElapsedMs}ms (max {shortcutKeyMaxWaitMs}ms); proceeding to send shortcut");
                                                 // Treat as idle: toggle and clear tracked
-                                                if (string.Equals(preserveHistoryMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
+                                                if (string.Equals(shortcutKeyMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
                                                 {
-                                                    ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winADelayMs);
+                                                    ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winShortcutKeyIntervalMS);
                                                     Logger.Instance?.Info("Notification Center toggled (preserve-history: timeout)");
                                                 }
                                                 else
                                                 {
-                                                    ToggleShortcutWithDetection('A', IsActionCenterOpen, winADelayMs);
+                                                    ToggleShortcutWithDetection('A', IsActionCenterOpen, winShortcutKeyIntervalMS);
                                                     Logger.Instance?.Info("Action Center toggled (preserve-history: timeout)");
                                                 }
                                                 try
@@ -360,17 +283,17 @@ namespace ToastCloser
                                             }
 
                                             uint elapsedSinceLastInput = (uint)(Environment.TickCount - Math.Max(_lastKeyboardTick, _lastMouseTick));
-                                            if (elapsedSinceLastInput >= (uint)preserveHistoryIdleMs)
+                                            if (elapsedSinceLastInput >= (uint)shortcutKeyWaitIdleMS)
                                             {
                                                 // Idle satisfied: toggle Action/Notification Center and clear tracked
-                                                if (string.Equals(preserveHistoryMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
+                                                if (string.Equals(shortcutKeyMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
                                                 {
-                                                    ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winADelayMs);
+                                                    ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winShortcutKeyIntervalMS);
                                                     Logger.Instance?.Info("Notification Center toggled (preserve-history)");
                                                 }
                                                 else
                                                 {
-                                                    ToggleShortcutWithDetection('A', IsActionCenterOpen, winADelayMs);
+                                                    ToggleShortcutWithDetection('A', IsActionCenterOpen, winShortcutKeyIntervalMS);
                                                     Logger.Instance?.Info("Action Center toggled (preserve-history)");
                                                 }
 
@@ -500,8 +423,8 @@ namespace ToastCloser
                         return (localFound, localUsedFallback);
                     });
 
-                    // Wait up to detectionTimeoutMs for the UIA search to complete
-                    if (searchTask.Wait(detectionTimeoutMs))
+                    // Wait up to detectionTimeoutMS for the UIA search to complete
+                    if (searchTask.Wait(detectionTimeoutMS))
                     {
                         var res = searchTask.Result;
                         foundList = res.foundLocal;
@@ -509,8 +432,8 @@ namespace ToastCloser
                     }
                     else
                     {
-                        Logger.Instance?.Warn($"CoreWindow search timed out after {detectionTimeoutMs}ms; skipping this scan to avoid long blocking. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                        Logger.Instance?.Debug($"CoreWindow search timed out after {detectionTimeoutMs}ms and was cancelled for this poll (durationMs={detectionTimeoutMs})");
+                        Logger.Instance?.Warn($"CoreWindow search timed out after {detectionTimeoutMS}ms; skipping this scan to avoid long blocking. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                        Logger.Instance?.Debug($"CoreWindow search timed out after {detectionTimeoutMS}ms and was cancelled for this poll (durationMs={detectionTimeoutMS})");
                         foundList = new List<FlaUI.Core.AutomationElements.AutomationElement>();
                         usedFallback = false;
 
@@ -530,7 +453,7 @@ namespace ToastCloser
                             }
                         });
 
-                        bool reinitCompleted = reinitTask.Wait(detectionTimeoutMs);
+                        bool reinitCompleted = reinitTask.Wait(detectionTimeoutMS);
                         reinitSw.Stop();
                         if (reinitCompleted && reinitTask.Result)
                         {
@@ -539,10 +462,10 @@ namespace ToastCloser
                         }
                         else
                         {
-                            LogConsole($"UIA reinitialization timed out after {detectionTimeoutMs}ms; will wait until next poll before retrying.");
-                            logger.Debug($"UIA reinitialization timed out after {detectionTimeoutMs}ms");
+                            LogConsole($"UIA reinitialization timed out after {detectionTimeoutMS}ms; will wait until next poll before retrying.");
+                            logger.Debug($"UIA reinitialization timed out after {detectionTimeoutMS}ms");
                             // Wait a small backoff equal to detection timeout to avoid immediate retry
-                            try { Thread.Sleep(detectionTimeoutMs); } catch { }
+                            try { Thread.Sleep(detectionTimeoutMS); } catch { }
                         }
                     }
 
@@ -779,7 +702,7 @@ namespace ToastCloser
 
                                     uint lastKbMouseTick = Math.Max(_lastKeyboardTick, _lastMouseTick);
 
-                                    // If the user is active (idle < preserveHistoryIdleMs), wait and retry until idle condition is met.
+                                    // If the user is active (idle < shortcutKeyWaitIdleMS), wait and retry until idle condition is met.
                                     bool treatAsActive = false;
                                     try
                                     {
@@ -810,7 +733,7 @@ namespace ToastCloser
                                             if (curLastKbMouseTick != 0)
                                             {
                                                 uint elapsedSinceLastInput = (uint)(Environment.TickCount - curLastKbMouseTick);
-                                                if (elapsedSinceLastInput <= (uint)preserveHistoryIdleMs)
+                                                if (elapsedSinceLastInput <= (uint)shortcutKeyWaitIdleMS)
                                                 {
                                                     isActiveNow = true;
                                                 }
@@ -834,14 +757,14 @@ namespace ToastCloser
                                             }
 
                                             // still active: wait in short intervals and poll keyboard/mouse so input during wait updates ticks
-                                            LogConsole($"key={key} User active: waiting up to {preserveHistoryIdleMs}ms while polling for keyboard/mouse activity (preserve-history)");
-                                            logger.Debug($"key={key} User active: waiting up to {preserveHistoryIdleMs}ms while polling for keyboard/mouse activity (preserve-history)");
+                                            LogConsole($"key={key} User active: waiting up to {shortcutKeyWaitIdleMS}ms while polling for keyboard/mouse activity (preserve-history)");
+                                            logger.Debug($"key={key} User active: waiting up to {shortcutKeyWaitIdleMS}ms while polling for keyboard/mouse activity (preserve-history)");
                                             treatAsActive = true;
 
                                             int waited = 0;
-                                            int step = Math.Min(200, Math.Max(50, preserveHistoryIdleMs / 10));
+                                            int step = Math.Min(200, Math.Max(50, shortcutKeyWaitIdleMS / 10));
                                             bool innerIdleSatisfied = false;
-                                            while (waited < preserveHistoryIdleMs)
+                                            while (waited < shortcutKeyWaitIdleMS)
                                             {
                                                 Thread.Sleep(step);
                                                 waited += step;
@@ -886,11 +809,11 @@ namespace ToastCloser
                                                 }
                                                 catch { }
 
-                                                // After polling, if no activity has occurred for preserveHistoryIdleMs, proceed immediately
+                                                // After polling, if no activity has occurred for shortcutKeyWaitIdleMS, proceed immediately
                                                 try
                                                 {
                                                     uint elapsedSinceLastInput = (uint)(Environment.TickCount - Math.Max(_lastKeyboardTick, _lastMouseTick));
-                                                    if (elapsedSinceLastInput >= (uint)preserveHistoryIdleMs)
+                                                    if (elapsedSinceLastInput >= (uint)shortcutKeyWaitIdleMS)
                                                     {
                                                         innerIdleSatisfied = true;
                                                         break; // exit inner wait loop and proceed to preserve-history
@@ -931,18 +854,18 @@ namespace ToastCloser
                                             LogConsole($"key={key} Opening Action Center to preserve history for {dedup.Count} toasts: {summary}");
                                             logger.Info($"key={key} Opening Action Center to preserve history for {dedup.Count} toasts: {summary}");
 
-                                            // Choose preserve-history toggle mode based on preserveHistoryMode
-                                            if (string.Equals(preserveHistoryMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
+                                            // Choose preserve-history toggle mode based on shortcutKeyMode
+                                            if (string.Equals(shortcutKeyMode, "noticecenter", StringComparison.OrdinalIgnoreCase))
                                             {
                                                 // Win+N -> Notification Center
-                                                ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winADelayMs);
+                                                ToggleShortcutWithDetection('N', IsNotificationCenterOpen, winShortcutKeyIntervalMS);
                                                 LogConsole($"key={key} Notification Center toggled (preserve-history)");
                                                 logger.Info($"key={key} Notification Center toggled (preserve-history)");
                                             }
                                             else
                                             {
                                                 // default: Win+A -> Quick Settings / Action Center
-                                                ToggleShortcutWithDetection('A', IsActionCenterOpen, winADelayMs);
+                                                ToggleShortcutWithDetection('A', IsActionCenterOpen, winShortcutKeyIntervalMS);
                                                 LogConsole($"key={key} Action Center toggled (preserve-history)");
                                                 logger.Info($"key={key} Action Center toggled (preserve-history)");
                                             }
