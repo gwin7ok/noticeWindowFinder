@@ -20,6 +20,9 @@ namespace ToastCloser
         // Maximum number of archived log files to keep. Older files beyond this count are deleted on startup.
         // Set to 0 to disable pruning.
         public int LogArchiveLimit { get; set; } = 100;
+        // When true, only notifications whose Attribution text exactly equals "www.youtube.com"
+        // will be considered for automatic closing. When false, all notifications are eligible.
+        public bool YoutubeOnly { get; set; } = true;
 
         public static string ConfigFileName => Path.Combine(AppContext.BaseDirectory, "ToastCloser.ini");
 
@@ -40,6 +43,7 @@ namespace ToastCloser
                 lines.Add($"WinShortcutKeyIntervalMS={WinShortcutKeyIntervalMS}");
                 lines.Add($"VerboseLog={VerboseLog}");
                 lines.Add($"LogArchiveLimit={LogArchiveLimit}");
+                lines.Add($"YoutubeOnly={YoutubeOnly}");
                 File.WriteAllLines(ConfigFileName, lines);
             }
             catch { }
@@ -73,6 +77,7 @@ namespace ToastCloser
                         case "WinShortcutKeyIntervalMS": int.TryParse(val, out var i4); cfg.WinShortcutKeyIntervalMS = i4; break;
                         case "VerboseLog": bool.TryParse(val, out var b3); cfg.VerboseLog = b3; break;
                         case "LogArchiveLimit": int.TryParse(val, out var la); cfg.LogArchiveLimit = la; break;
+                        case "YoutubeOnly": bool.TryParse(val, out var y1); cfg.YoutubeOnly = y1; break;
                     }
                 }
             }

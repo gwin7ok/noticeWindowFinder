@@ -422,10 +422,23 @@ namespace ToastCloser
                                                 {
                                                     var attr = SafeGetName(tbAttr);
                                                     Logger.Instance?.Debug($"Attribution.Name=\"{attr}\" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
-                                                    if (!string.IsNullOrEmpty(attr) && attr.IndexOf("www.youtube.com", StringComparison.OrdinalIgnoreCase) >= 0)
+                                                    if (!string.IsNullOrEmpty(attr))
                                                     {
-                                                        localFound.Add(t);
-                                                        Logger.Instance?.Debug($"Added FlexibleToastView candidate (Attribution contains 'www.youtube.com') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                        // Respect user configuration: when YoutubeOnly is true, require exact match
+                                                        if (cfg?.YoutubeOnly ?? true)
+                                                        {
+                                                            if (string.Equals(attr.Trim(), "www.youtube.com", StringComparison.OrdinalIgnoreCase))
+                                                            {
+                                                                localFound.Add(t);
+                                                                Logger.Instance?.Debug($"Added FlexibleToastView candidate (Attribution equals 'www.youtube.com') (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            // Not limited to YouTube: any attribution present qualifies
+                                                            localFound.Add(t);
+                                                            Logger.Instance?.Debug($"Added FlexibleToastView candidate (Attribution present) (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                                                        }
                                                     }
                                                 }
                                             }
