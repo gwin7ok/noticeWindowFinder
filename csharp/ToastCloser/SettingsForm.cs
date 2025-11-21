@@ -1,5 +1,7 @@
 using System;
 using System.Windows.Forms;
+using System.Diagnostics;
+using System.IO;
 
 namespace ToastCloser
 {
@@ -60,6 +62,7 @@ namespace ToastCloser
         private TextBox txtDisplayLimit = null!;
         private TextBox txtPollInterval = null!;
         private TextBox txtLogArchiveLimit = null!;
+        private Button btnOpenLogs = null!;
         private TextBox txtIdleMS = null!;
         private TextBox txtMaxMonitorSeconds = null!;
         private TextBox txtDetectionTimeoutMS = null!;
@@ -76,6 +79,7 @@ namespace ToastCloser
             this.txtDisplayLimit = new TextBox() { Left = 380, Top = 20, Width = 140 };
             this.txtPollInterval = new TextBox() { Left = 380, Top = 60, Width = 140 };
             this.txtLogArchiveLimit = new TextBox() { Left = 380, Top = 100, Width = 140 };
+            this.btnOpenLogs = new Button() { Text = "ログフォルダを開く", Left = 540, Top = 98, Width = 220 }; 
             this.chkDetectOnly = new CheckBox() { Left = 20, Top = 100, Text = "検出のみ (DetectOnly)", AutoSize = true };
             this.cmbShortcutKeyMode = new ComboBox() { Left = 380, Top = 140, Width = 160, DropDownStyle = ComboBoxStyle.DropDownList };
             this.cmbShortcutKeyMode.Items.AddRange(new object[] { "noticecenter", "quicksetting" });
@@ -96,8 +100,8 @@ namespace ToastCloser
             var lbl6 = new Label() { Left = 20, Top = 302, Width = 340, Text = "WinShortcutKeyIntervalMS:", AutoSize = false };
             var lblMode = new Label() { Left = 20, Top = 142, Width = 340, Text = "ShortcutKeyMode:", AutoSize = false };
 
-            this.ClientSize = new System.Drawing.Size(760, 520);
-            this.Controls.AddRange(new Control[] { lbl1, lbl2, lblLogLimit, lblMode, lbl3, lbl4, lbl5, lbl6, txtDisplayLimit, txtPollInterval, txtLogArchiveLimit, cmbShortcutKeyMode, txtIdleMS, txtMaxMonitorSeconds, txtDetectionTimeoutMS, txtWinShortcutKeyIntervalMS, chkDetectOnly, chkVerbose, btnSave, btnCancel });
+            this.ClientSize = new System.Drawing.Size(960, 520);
+            this.Controls.AddRange(new Control[] { lbl1, lbl2, lblLogLimit, lblMode, lbl3, lbl4, lbl5, lbl6, txtDisplayLimit, txtPollInterval, txtLogArchiveLimit, btnOpenLogs, cmbShortcutKeyMode, txtIdleMS, txtMaxMonitorSeconds, txtDetectionTimeoutMS, txtWinShortcutKeyIntervalMS, chkDetectOnly, chkVerbose, btnSave, btnCancel });
             this.Text = "ToastCloser 設定";
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -105,6 +109,22 @@ namespace ToastCloser
 
             btnSave.Click += btnSave_Click;
             btnCancel.Click += btnCancel_Click;
+            btnOpenLogs.Click += btnOpenLogs_Click;
+        }
+
+        private void btnOpenLogs_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var logsDir = Path.Combine(AppContext.BaseDirectory, "logs");
+                try { Directory.CreateDirectory(logsDir); } catch { }
+                var psi = new ProcessStartInfo("explorer.exe", logsDir) { UseShellExecute = true };
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"ログフォルダを開けませんでした: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
         #endregion
     }
