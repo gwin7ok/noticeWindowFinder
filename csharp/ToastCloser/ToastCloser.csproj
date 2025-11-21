@@ -14,4 +14,18 @@
     <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="Resources\ToastCloser.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\ToastCloser.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="GenerateToastCloserIco" BeforeTargets="BeforeBuild">
+    <!-- Generate ToastCloser.ico from PNG if PNG exists -->
+    <Exec Command="dotnet run -c Release --project ..\..\tools\iconize\iconize.csproj -- &quot;$(ProjectDir)Resources\ToastCloser.png&quot; &quot;$(ProjectDir)Resources\ToastCloser.ico&quot;" IgnoreExitCode="true" />
+  </Target>
+
 </Project>

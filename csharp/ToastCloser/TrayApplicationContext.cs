@@ -17,9 +17,49 @@ namespace ToastCloser
         {
             _config = cfg;
 
+            var pngPath = Path.Combine(AppContext.BaseDirectory, "ToastCloser.png");
             var iconPath = Path.Combine(AppContext.BaseDirectory, "ToastCloser.ico");
+            // Also check Resources subfolder where build may copy Content files
+            var pngPathResources = Path.Combine(AppContext.BaseDirectory, "Resources", "ToastCloser.png");
+            var iconPathResources = Path.Combine(AppContext.BaseDirectory, "Resources", "ToastCloser.ico");
             Icon icon = SystemIcons.Application;
-            try { if (File.Exists(iconPath)) icon = new Icon(iconPath); } catch { }
+            try
+            {
+                Program.Logger.Instance?.Info($"Tray icon candidates: ico='{iconPath}', icoRes='{iconPathResources}', png='{pngPath}', pngRes='{pngPathResources}'");
+                // Prefer a provided ICO (preserves proper alpha) if present in either location
+                if (File.Exists(iconPath) || File.Exists(iconPathResources))
+                {
+                    var realIco = File.Exists(iconPath) ? iconPath : iconPathResources;
+                    Program.Logger.Instance?.Info($"Loading ICO from: {realIco}");
+                    try
+                    {
+                        icon = new Icon(realIco);
+                        Program.Logger.Instance?.Info("Loaded ICO successfully");
+                        try
+                        {
+                            bool hasAlpha = ValidateIcoAlpha(realIco);
+                            Program.Logger.Instance?.Info($"ICO alpha present: {hasAlpha}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Program.Logger.Instance?.Error("ValidateIcoAlpha failed: " + ex.Message);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Program.Logger.Instance?.Error("Failed to load ICO: " + ex.Message);
+                    }
+                }
+                // Note: we intentionally do not fall back to runtime PNG->HICON conversion.
+                // The build step generates `Resources\ToastCloser.ico` from the PNG and that
+                // ICO will be copied into the app's output. Using the ICO preserves proper
+                // alpha and avoids platform-dependent HICON issues. If no ICO is found,
+                // we keep the default SystemIcons.Application value.
+            }
+            catch (Exception ex)
+            {
+                Program.Logger.Instance?.Error("Unexpected error selecting tray icon: " + ex.Message);
+            }
 
             _trayIcon = new NotifyIcon()
             {
@@ -158,6 +198,60 @@ namespace ToastCloser
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             Application.Exit();
+        }
+
+        // Validate ICO by parsing image entries and looking for embedded PNG frames.
+        // If a PNG frame is found, load it and check for any pixel with alpha != 255.
+        private static bool ValidateIcoAlpha(string icoPath)
+        {
+            if (!File.Exists(icoPath)) return false;
+            using (var fs = new FileStream(icoPath, FileMode.Open, FileAccess.Read))
+            using (var br = new BinaryReader(fs))
+            {
+                // ICONDIR header
+                ushort reserved = br.ReadUInt16();
+                ushort type = br.ReadUInt16();
+                ushort count = br.ReadUInt16();
+                for (int i = 0; i < count; i++)
+                {
+                    byte width = br.ReadByte();
+                    byte height = br.ReadByte();
+                    byte colors = br.ReadByte();
+                    byte reservedEntry = br.ReadByte();
+                    ushort planes = br.ReadUInt16();
+                    ushort bitCount = br.ReadUInt16();
+                    uint bytesInRes = br.ReadUInt32();
+                    uint imageOffset = br.ReadUInt32();
+
+                    long pos = fs.Position;
+                    fs.Seek(imageOffset, SeekOrigin.Begin);
+                    byte[] header = br.ReadBytes((int)Math.Min(8, bytesInRes));
+                    // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+                    if (header.Length >= 8 && header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4E && header[3] == 0x47 && header[4] == 0x0D && header[5] == 0x0A && header[6] == 0x1A && header[7] == 0x0A)
+                    {
+                        fs.Seek(imageOffset, SeekOrigin.Begin);
+                        byte[] pngData = br.ReadBytes((int)bytesInRes);
+                        try
+                        {
+                            using (var ms = new MemoryStream(pngData))
+                            using (var img = Image.FromStream(ms))
+                            using (var bmp = new Bitmap(img))
+                            {
+                                for (int y = 0; y < bmp.Height; y++)
+                                {
+                                    for (int x = 0; x < bmp.Width; x++)
+                                    {
+                                        if (bmp.GetPixel(x, y).A != 255) return true;
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* ignore parse failures and try next entry */ }
+                    }
+                    fs.Seek(pos, SeekOrigin.Begin);
+                }
+            }
+            return false;
         }
     }
 }
