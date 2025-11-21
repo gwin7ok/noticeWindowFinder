@@ -8,17 +8,17 @@ namespace ToastCloser
     public class Config
     {
         public double DisplayLimitSeconds { get; set; } = 10.0;
-        public double PollIntervalSeconds { get; set; } = 1.0;
+        public double PollIntervalSeconds { get; set; } = 10.0;
         public bool DetectOnly { get; set; } = false;
         public string ShortcutKeyMode { get; set; } = "noticecenter";
-        public int ShortcutKeyWaitIdleMS { get; set; } = 2000;
-        public int ShortcutKeyMaxWaitSeconds { get; set; } = 15;
-        public int DetectionTimeoutMS { get; set; } = 2000;
+        public int ShortcutKeyWaitIdleMS { get; set; } = 1000;
+        public int ShortcutKeyMaxWaitSeconds { get; set; } = 10;
+        public int DetectionTimeoutMS { get; set; } = 1000;
         public int WinShortcutKeyIntervalMS { get; set; } = 300;
         public bool VerboseLog { get; set; } = false;
         // Maximum number of archived log files to keep. Older files beyond this count are deleted on startup.
         // Set to 0 to disable pruning.
-        public int LogArchiveLimit { get; set; } = 100;
+        public int LogArchiveLimit { get; set; } = 50;
         // When true, only notifications whose Attribution text exactly equals "www.youtube.com"
         // will be considered for automatic closing. When false, all notifications are eligible.
         public bool YoutubeOnly { get; set; } = true;
