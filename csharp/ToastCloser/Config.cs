@@ -10,7 +10,6 @@ namespace ToastCloser
         public double DisplayLimitSeconds { get; set; } = 10.0;
         public double PollIntervalSeconds { get; set; } = 1.0;
         public bool DetectOnly { get; set; } = false;
-        public bool PreserveHistory { get; set; } = true;
         public string ShortcutKeyMode { get; set; } = "noticecenter";
         public int ShortcutKeyWaitIdleMS { get; set; } = 2000;
         public int ShortcutKeyMaxWaitSeconds { get; set; } = 15;
@@ -50,7 +49,6 @@ namespace ToastCloser
                 lines.Add($"DisplayLimitSeconds={DisplayLimitSeconds.ToString(CultureInfo.InvariantCulture)}");
                 lines.Add($"PollIntervalSeconds={PollIntervalSeconds.ToString(CultureInfo.InvariantCulture)}");
                 lines.Add($"DetectOnly={DetectOnly}");
-                lines.Add($"PreserveHistory={PreserveHistory}");
                 lines.Add($"ShortcutKeyMode={ShortcutKeyMode}");
                 lines.Add($"ShortcutKeyWaitIdleMS={ShortcutKeyWaitIdleMS}");
                 lines.Add($"ShortcutKeyMaxWaitSeconds={ShortcutKeyMaxWaitSeconds}");
@@ -94,7 +92,6 @@ namespace ToastCloser
                         case "DisplayLimitSeconds": double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var v1); cfg.DisplayLimitSeconds = v1; break;
                         case "PollIntervalSeconds": double.TryParse(val, NumberStyles.Float, CultureInfo.InvariantCulture, out var v2); cfg.PollIntervalSeconds = v2; break;
                         case "DetectOnly": bool.TryParse(val, out var b1); cfg.DetectOnly = b1; break;
-                        case "PreserveHistory": bool.TryParse(val, out var b2); cfg.PreserveHistory = b2; break;
                         case "ShortcutKeyMode": cfg.ShortcutKeyMode = val; break;
                         case "ShortcutKeyWaitIdleMS": int.TryParse(val, out var i1); cfg.ShortcutKeyWaitIdleMS = i1; break;
                         case "ShortcutKeyMaxWaitSeconds": int.TryParse(val, out var i2); cfg.ShortcutKeyMaxWaitSeconds = i2; break;

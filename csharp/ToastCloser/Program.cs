@@ -72,7 +72,6 @@ namespace ToastCloser
             minSeconds = cfg.DisplayLimitSeconds;
             poll = cfg.PollIntervalSeconds;
             detectOnly = cfg.DetectOnly;
-            preserveHistory = cfg.PreserveHistory;
             shortcutKeyMode = cfg.ShortcutKeyMode ?? "noticecenter";
             shortcutKeyWaitIdleMS = cfg.ShortcutKeyWaitIdleMS;
             // Config stores max wait in seconds; convert to milliseconds for internal usage
