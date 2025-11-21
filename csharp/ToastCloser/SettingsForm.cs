@@ -144,10 +144,49 @@ namespace ToastCloser
             this.chkYoutubeOnly = new CheckBox() { Text = "YouTube の通知のみを対象にする", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0,12,0,12) };
             this.cmbShortcutKeyMode = new ComboBox() { DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(2) };
             this.cmbShortcutKeyMode.Items.AddRange(new object[] { "noticecenter", "quicksetting" });
+            // Use owner-draw to vertically center the combo text reliably; draw using font metrics and nudge upward
+            this.cmbShortcutKeyMode.DrawMode = DrawMode.OwnerDrawFixed;
+            this.cmbShortcutKeyMode.DrawItem += (s, e) =>
+            {
+                try
+                {
+                    e.DrawBackground();
+                    string text = (e.Index >= 0 && e.Index < this.cmbShortcutKeyMode.Items.Count) ? this.cmbShortcutKeyMode.Items[e.Index]?.ToString() ?? string.Empty : this.cmbShortcutKeyMode.Text ?? string.Empty;
+                    float textH = e.Bounds.Height;
+                    try
+                    {
+                        var ff = this.cmbShortcutKeyMode.Font.FontFamily;
+                        var style = this.cmbShortcutKeyMode.Font.Style;
+                        float emHeight = ff.GetEmHeight(style);
+                        float cellAscent = ff.GetCellAscent(style);
+                        float cellDescent = ff.GetCellDescent(style);
+                        float dpi = e.Graphics.DpiY;
+                        float ascentPx = this.cmbShortcutKeyMode.Font.Size * (cellAscent / emHeight) * (dpi / 72f);
+                        float descentPx = this.cmbShortcutKeyMode.Font.Size * (cellDescent / emHeight) * (dpi / 72f);
+                        textH = ascentPx + descentPx;
+                    }
+                    catch { }
+
+                    // center vertically within the bounds, then nudge up slightly to match TextBox baseline
+                    float y = e.Bounds.Top + (e.Bounds.Height - textH) / 2f - ComboBoxVerticalNudge;
+                    var drawRect = new RectangleF(e.Bounds.Left + 2, y, e.Bounds.Width - 4, textH);
+                    using (var brush = new SolidBrush(e.ForeColor))
+                    {
+                        e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                        var sf = new StringFormat() { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near };
+                        e.Graphics.DrawString(text, this.cmbShortcutKeyMode.Font, brush, drawRect, sf);
+                    }
+                    e.DrawFocusRectangle();
+                }
+                catch { }
+            };
             // Wrap the ComboBox in a bordered panel so it visually matches textboxes with a single-line border
             var pnlComboWrap = new Panel() { Width = 180, Height = 28, BorderStyle = BorderStyle.FixedSingle, Margin = new Padding(0,12,0,12), Anchor = AnchorStyles.Left };
             this.cmbShortcutKeyMode.Dock = DockStyle.Fill;
             pnlComboWrap.Controls.Add(this.cmbShortcutKeyMode);
+            // Ensure ItemHeight matches the panel's client height so DrawItem bounds align with visual area
+            try { this.cmbShortcutKeyMode.ItemHeight = Math.Max(1, pnlComboWrap.ClientSize.Height); } catch { }
+            pnlComboWrap.SizeChanged += (s, e) => { try { this.cmbShortcutKeyMode.ItemHeight = Math.Max(1, pnlComboWrap.ClientSize.Height); } catch { } };
             this.txtIdleMS = new TextBox() { Width = 180, Anchor = AnchorStyles.Left, Margin = new Padding(0,12,0,12), Multiline = true, AcceptsReturn = false, WordWrap = false, BorderStyle = BorderStyle.FixedSingle, Height = 28 };
             this.txtMaxMonitorSeconds = new TextBox() { Width = 180, Anchor = AnchorStyles.Left, Margin = new Padding(0,12,0,12), Multiline = true, AcceptsReturn = false, WordWrap = false, BorderStyle = BorderStyle.FixedSingle, Height = 28 };
             this.txtDetectionTimeoutMS = new TextBox() { Width = 180, Anchor = AnchorStyles.Left, Margin = new Padding(0,12,0,12), Multiline = true, AcceptsReturn = false, WordWrap = false, BorderStyle = BorderStyle.FixedSingle, Height = 28 };
@@ -269,19 +308,33 @@ namespace ToastCloser
             catch { }
         }
 
+        // Small vertical nudge values: TextBox moves down, ComboBox moves up
+        private const int TextBoxVerticalNudge = 2; // pixels down
+        private const int ComboBoxVerticalNudge = 3; // pixels up (tuned to final)
+
         private void UpdateTextBoxRect(TextBox tb)
         {
             try
             {
                 if (!tb.IsHandleCreated) return;
-                // Measure text height more precisely using single-line flags
-                var sample = string.IsNullOrEmpty(tb.Text) ? "0" : tb.Text;
-                var textSize = TextRenderer.MeasureText(sample, tb.Font, new System.Drawing.Size(tb.ClientSize.Width, int.MaxValue), TextFormatFlags.SingleLine | TextFormatFlags.NoPadding);
-                int textH = textSize.Height;
-                const int VerticalAdjustment = 2; // nudge down a few pixels to visually center across DPI/font combos
-                int top = Math.Max(0, (tb.ClientSize.Height - textH) / 2 + VerticalAdjustment);
-                var rc = new RECT { left = 0, top = top, right = tb.ClientSize.Width, bottom = tb.ClientSize.Height };
-                SendMessage(tb.Handle, EM_SETRECT, IntPtr.Zero, ref rc);
+                // Use font metrics (ascent/descent) to compute precise text height in pixels
+                using (var g = tb.CreateGraphics())
+                {
+                    float dpi = g.DpiY;
+                    var ff = tb.Font.FontFamily;
+                    var style = tb.Font.Style;
+                    float emHeight = ff.GetEmHeight(style);
+                    float cellAscent = ff.GetCellAscent(style);
+                    float cellDescent = ff.GetCellDescent(style);
+                    // Font.Size is in points by default; convert to pixels using dpi/72
+                    float ascentPx = tb.Font.Size * (cellAscent / emHeight) * (dpi / 72f);
+                    float descentPx = tb.Font.Size * (cellDescent / emHeight) * (dpi / 72f);
+                    int textH = (int)Math.Round(ascentPx + descentPx);
+                    // center and then nudge downward slightly to better match ComboBox baseline
+                    int top = Math.Max(0, (tb.ClientSize.Height - textH) / 2 + TextBoxVerticalNudge);
+                    var rc = new RECT { left = 0, top = top, right = tb.ClientSize.Width, bottom = tb.ClientSize.Height };
+                    SendMessage(tb.Handle, EM_SETRECT, IntPtr.Zero, ref rc);
+                }
             }
             catch { }
         }
