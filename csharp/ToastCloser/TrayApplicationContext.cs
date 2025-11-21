@@ -29,14 +29,23 @@ namespace ToastCloser
             };
 
             _menu = new ContextMenuStrip();
+            try { _menu.ShowItemToolTips = true; } catch { }
             var settingsItem = new ToolStripMenuItem("設定...");
+            try { settingsItem.Font = new Font(settingsItem.Font, FontStyle.Regular); } catch { }
             settingsItem.Click += (s, e) => ShowSettings();
+
             var consoleItem = new ToolStripMenuItem("コンソールを表示");
+            try { consoleItem.Font = new Font(consoleItem.Font, FontStyle.Bold); } catch { }
             consoleItem.Click += (s, e) => ToggleConsole();
+
             var reloadItem = new ToolStripMenuItem("設定を再読み込み");
+            try { reloadItem.Font = new Font(reloadItem.Font, FontStyle.Regular); } catch { }
             reloadItem.Click += (s, e) => ReloadConfig();
+
             var exitItem = new ToolStripMenuItem("終了");
+            try { exitItem.Font = new Font(exitItem.Font, FontStyle.Regular); } catch { }
             exitItem.Click += (s, e) => ExitApplication();
+            try { exitItem.ToolTipText = "終了のショートカット: アイコンをミドルクリック"; } catch { }
 
             _menu.Items.Add(settingsItem);
             _menu.Items.Add(consoleItem);
