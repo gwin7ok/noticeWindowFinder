@@ -200,18 +200,18 @@ namespace ToastCloser
             this.btnSave = new Button() { Text = "保存", Width = 100, Height = 32, TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(6,8,6,8) };
             this.btnCancel = new Button() { Text = "キャンセル", Width = 140, Height = 32, TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(6,8,6,8) };
 
-            // Add rows
-            tl.Controls.Add(lbl1, 0, 0); tl.Controls.Add(this.txtDisplayLimit, 1, 0);
-            tl.Controls.Add(lbl2, 0, 1); tl.Controls.Add(this.txtPollInterval, 1, 1);
-            tl.Controls.Add(lblLogLimit, 0, 2); tl.Controls.Add(this.txtLogArchiveLimit, 1, 2); tl.Controls.Add(this.btnOpenLogs, 2, 2);
+            // Add rows (reordered per requested layout)
+            tl.Controls.Add(lbl2, 0, 0); tl.Controls.Add(this.txtPollInterval, 1, 0);
+            tl.Controls.Add(lbl1, 0, 1); tl.Controls.Add(this.txtDisplayLimit, 1, 1);
+            tl.Controls.Add(lblDetect, 0, 2); tl.Controls.Add(this.txtDetectionTimeoutMS, 1, 2);
             tl.Controls.Add(this.chkYoutubeOnly, 0, 3); tl.SetColumnSpan(this.chkYoutubeOnly, 3);
-            tl.Controls.Add(lblMode, 0, 4); tl.Controls.Add(pnlComboWrap, 1, 4);
-            tl.Controls.Add(lblIdle, 0, 5); tl.Controls.Add(this.txtIdleMS, 1, 5);
-            tl.Controls.Add(lblMaxWait, 0, 6); tl.Controls.Add(this.txtMaxMonitorSeconds, 1, 6);
-            tl.Controls.Add(lblDetect, 0, 7); tl.Controls.Add(this.txtDetectionTimeoutMS, 1, 7);
+            tl.Controls.Add(this.chkDetectOnly, 0, 4); tl.SetColumnSpan(this.chkDetectOnly, 3);
+            tl.Controls.Add(lblMode, 0, 5); tl.Controls.Add(pnlComboWrap, 1, 5);
+            tl.Controls.Add(lblIdle, 0, 6); tl.Controls.Add(this.txtIdleMS, 1, 6);
+            tl.Controls.Add(lblMaxWait, 0, 7); tl.Controls.Add(this.txtMaxMonitorSeconds, 1, 7);
             tl.Controls.Add(lblWin, 0, 8); tl.Controls.Add(this.txtWinShortcutKeyIntervalMS, 1, 8);
-            tl.Controls.Add(this.chkDetectOnly, 0, 9); tl.SetColumnSpan(this.chkDetectOnly, 3);
-            tl.Controls.Add(this.chkVerbose, 0, 10); tl.SetColumnSpan(this.chkVerbose, 3);
+            tl.Controls.Add(this.chkVerbose, 0, 9); tl.SetColumnSpan(this.chkVerbose, 3);
+            tl.Controls.Add(lblLogLimit, 0, 10); tl.Controls.Add(this.txtLogArchiveLimit, 1, 10); tl.Controls.Add(this.btnOpenLogs, 2, 10);
 
             // Buttons + note container: buttons on top, informational note directly beneath
             var buttonsContainer = new TableLayoutPanel() { ColumnCount = 1, RowCount = 2, AutoSize = true, Dock = DockStyle.Fill };
