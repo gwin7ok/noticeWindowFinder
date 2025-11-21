@@ -57,7 +57,7 @@ namespace ToastCloser
             // rather than attempting to close individual toast UI elements.
             bool preserveHistory = true;
             bool wmCloseOnly = false;
-            bool skipFallback = false;
+            
             int shortcutKeyWaitIdleMS = 2000; // default: require 2s idle
             int shortcutKeyMaxWaitMS = 15000; // default: 15s max monitoring
             string shortcutKeyMode = "noticecenter";
@@ -83,11 +83,8 @@ namespace ToastCloser
             Logger.IsDebugEnabled = _verboseLog;
 
             // If the legacy --skip-fallback flag is present, warn that it's currently unused
-            if (skipFallback)
-            {
-                Logger.Instance?.Warn("Option --skip-fallback was specified but there are no fallback search paths enabled; this option is currently unused and will be ignored.");
-            }
-            Logger.Instance?.Info($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} shortcutKeyMode={shortcutKeyMode} wmCloseOnly={wmCloseOnly} skipFallback={skipFallback} detectionTimeoutMS={detectionTimeoutMS} winShortcutKeyIntervalMS={winShortcutKeyIntervalMS})");
+            // Note: skipFallback option is currently unused; fallback search paths removed.
+            Logger.Instance?.Info($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} shortcutKeyMode={shortcutKeyMode} wmCloseOnly={wmCloseOnly} detectionTimeoutMS={detectionTimeoutMS} winShortcutKeyIntervalMS={winShortcutKeyIntervalMS})");
 
             var tracked = new Dictionary<string, TrackedInfo>();
             var groups = new Dictionary<int, DateTime>();
@@ -336,14 +333,12 @@ namespace ToastCloser
                     // Primary search: prefer CoreWindow -> ScrollViewer -> FlexibleToastView chain
                     // and only select toasts whose Attribution TextBlock contains 'youtube' (or 'www.youtube.com').
                     var foundList = new List<FlaUI.Core.AutomationElements.AutomationElement>();
-                    bool usedFallback = false;
 
                     // Run the CoreWindow -> ScrollViewer -> FlexibleToastView discovery on a worker task
                     // and enforce a timeout to avoid long blocking UIA calls immediately after close actions.
-                    Task<(List<FlaUI.Core.AutomationElements.AutomationElement> foundLocal, bool usedFallbackLocal)> searchTask = Task.Run(() =>
+                    Task<List<FlaUI.Core.AutomationElements.AutomationElement>> searchTask = Task.Run(() =>
                     {
                         var localFound = new List<FlaUI.Core.AutomationElements.AutomationElement>();
-                        bool localUsedFallback = false;
                         try
                         {
                             // capture local automation references to avoid races
@@ -352,7 +347,7 @@ namespace ToastCloser
                             if (localCf == null || localDesktop == null)
                             {
                                 Logger.Instance?.Info("UIA not initialized for search; skipping local search");
-                                return (localFound, localUsedFallback);
+                                return localFound;
                             }
                             // try CoreWindow by name '新しい通知' first
                             var coreByNameCond = localCf.ByClassName("Windows.UI.Core.CoreWindow").And(localCf.ByName("新しい通知"));
@@ -420,22 +415,19 @@ namespace ToastCloser
                         {
                             Logger.Instance?.Error("Exception during CoreWindow path: " + ex.Message + $" (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                         }
-                        return (localFound, localUsedFallback);
+                        return localFound;
                     });
 
                     // Wait up to detectionTimeoutMS for the UIA search to complete
                     if (searchTask.Wait(detectionTimeoutMS))
                     {
-                        var res = searchTask.Result;
-                        foundList = res.foundLocal;
-                        usedFallback = res.usedFallbackLocal;
+                        foundList = searchTask.Result;
                     }
                     else
                     {
                         Logger.Instance?.Warn($"CoreWindow search timed out after {detectionTimeoutMS}ms; skipping this scan to avoid long blocking. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                         Logger.Instance?.Debug($"CoreWindow search timed out after {detectionTimeoutMS}ms and was cancelled for this poll (durationMS={detectionTimeoutMS})");
                         foundList = new List<FlaUI.Core.AutomationElements.AutomationElement>();
-                        usedFallback = false;
 
                         // Attempt to reinitialize UIA automation after a timeout. Run InitializeAutomation() with the same timeout.
                         var reinitSw = System.Diagnostics.Stopwatch.StartNew();
@@ -475,13 +467,12 @@ namespace ToastCloser
                     {
                         LogConsole($"No toasts found by CoreWindow-based search; ending search for this scan. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
                         found = new FlaUI.Core.AutomationElements.AutomationElement[0];
-                        usedFallback = false;
                     }
 
                     var searchEnd = DateTime.UtcNow;
                     var searchMS = (searchEnd - searchStart).TotalMilliseconds;
-                    LogConsole($"Toast search: end (duration={searchMS:0.0}ms) found={found.Length} usedFallback={usedFallback}");
-                    logger.Debug($"Scan found {found.Length} candidates (usedFallback={usedFallback}) durationMS={searchMS:0.0}");
+                    LogConsole($"Toast search: end (duration={searchMS:0.0}ms) found={found.Length}");
+                    logger.Debug($"Scan found {found.Length} candidates durationMS={searchMS:0.0}");
                     for (int _i = 0; _i < found.Length; _i++)
                     {
                         var w = found[_i];
@@ -542,7 +533,7 @@ namespace ToastCloser
                                 assignedGroup = nextGroupId++;
                                 groups[assignedGroup] = now;
                             }
-                            var methodStr = usedFallback ? "fallback" : "priority";
+                            var methodStr = "priority";
                             string contentSummary = string.Empty;
                             string contentDisplay = string.Empty;
                             try
@@ -638,7 +629,7 @@ namespace ToastCloser
                         try
                         {
                             var stored = tracked[key];
-                            var methodStored = stored.Method ?? (usedFallback ? "fallback" : "priority");
+                            var methodStored = stored.Method ?? "priority";
                             var pidStored = stored.Pid;
                             var nameStored = stored.ShortName ?? string.Empty;
                             var stillMsg = $"閉じられていない通知があります　key={key} | Found | group={groupId} | method={methodStored} | pid={pidStored} | name=\"{nameStored}\" (elapsed {elapsed:0.0})";
