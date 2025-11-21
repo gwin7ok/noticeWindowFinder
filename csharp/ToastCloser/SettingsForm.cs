@@ -105,10 +105,11 @@ namespace ToastCloser
             var tl = new TableLayoutPanel();
             tl.ColumnCount = 3;
             tl.RowCount = 12;
-            tl.AutoSize = true;
-            tl.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            tl.AutoSize = false;
+            tl.AutoSizeMode = AutoSizeMode.GrowOnly;
+            tl.Dock = DockStyle.Fill;
             tl.Location = new System.Drawing.Point(10, 10);
-            tl.Padding = new Padding(6);
+            tl.Padding = new Padding(12);
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380F)); // label column (widened to avoid wrapping)
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F)); // control column
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));  // extra (e.g., open logs button)
@@ -166,7 +167,7 @@ namespace ToastCloser
             tl.Controls.Add(fl, 0, 11); tl.SetColumnSpan(fl, 3);
 
             // Finalize form
-            this.ClientSize = new System.Drawing.Size(980, 560);
+            this.ClientSize = new System.Drawing.Size(980, 640);
             this.Controls.Clear();
             this.Controls.Add(tl);
             this.Text = "ToastCloser 設定";
