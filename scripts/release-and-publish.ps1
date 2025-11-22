@@ -43,18 +43,33 @@ if ($DryRun) {
     $useTemp = $false
     if ($env:GITHUB_ACTIONS -and $env:GITHUB_ACTIONS -eq 'true') { $useTemp = $true }
 
-    $pbArgs = "-ProjectPath 'csharp\ToastCloser\ToastCloser.csproj' -ArtifactPrefix 'ToastCloser'"
-    if ($tagForBuild) { $pbArgs += " -ReleaseVersion '$tagForBuild'" }
-    if ($useTemp) { $pbArgs += ' -UseTempDir' }
+    $pbArgsArray = @('-ProjectPath', 'csharp\ToastCloser\ToastCloser.csproj', '-ArtifactPrefix', 'ToastCloser')
+    if ($tagForBuild) { $pbArgsArray += @('-ReleaseVersion', $tagForBuild) }
+    if ($useTemp) { $pbArgsArray += '-UseTempDir' }
 
-    Write-Host "Calling post-build with: $pbArgs"
-    pwsh -NoProfile -File .\scripts\post-build.ps1 $pbArgs
+    Write-Host "Calling post-build with: $($pbArgsArray -join ' ')"
+    # Capture output from post-build to find created zip path (supports creating zip in temp during CI)
+    $pbOutput = & pwsh -NoProfile -File .\scripts\post-build.ps1 @pbArgsArray 2>&1
+    Write-Host $pbOutput
+
+    # Try to extract created zip path from output (line starts with 'Created ')
+    $createdZip = $null
+    foreach ($line in $pbOutput -split "`n") {
+        if ($line -match 'Created\s+(.*)') { $createdZip = $Matches[1].Trim(); break }
+    }
+    if ($createdZip) {
+        Write-Host "Detected created zip: $createdZip"
+        # use the created zip as the artifact to upload
+        $zips = @(Get-Item -LiteralPath $createdZip -ErrorAction SilentlyContinue)
+    } else {
+        # fallback to locating zips under PWD
+        $zipPattern = "${PWD}\ToastCloser_*.zip"
+        $zips = Get-ChildItem -Path $zipPattern -ErrorAction SilentlyContinue
+    }
 }
 
 # After packaging: upload via GH CLI if available, otherwise instruct user to upload
 if (-not $DryRun) {
-    $zipPattern = "${PWD}\ToastCloser_*.zip"
-    $zips = Get-ChildItem -Path $zipPattern -ErrorAction SilentlyContinue
     if ($zips -and (Get-Command gh -ErrorAction SilentlyContinue)) {
         # Ensure gh is authenticated non-interactively using GITHUB_TOKEN when running in Actions
         if (-not $env:GITHUB_TOKEN) {
