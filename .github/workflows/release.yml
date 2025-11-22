@@ -46,7 +46,7 @@ jobs:
       - name: Run post-build script (PowerShell)
         shell: pwsh
         run: |
-          pwsh -NoProfile -File .\scripts\post-build.ps1 `
+          & .\scripts\post-build.ps1 `
             -ProjectPath "csharp/ToastCloser/ToastCloser.csproj" `
             -ArtifactPrefix "ToastCloser" `
             -Configuration "Release" `
@@ -63,6 +63,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: pwsh
         run: |
-          pwsh -NoProfile -File .\scripts\release-and-publish.ps1 `
+          & .\scripts\release-and-publish.ps1 `
             -DryRun:$false `
             -SkipBuild
