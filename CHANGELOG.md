@@ -11,11 +11,11 @@ and this project adheres to Semantic Versioning.
 
 - (none)
 
-## [1.0.0] - 2025-11-22
+## [v1.0.0] - 2025-11-22
 
 ### Added
 
 - 初期リリース
 
 [Unreleased]: https://github.com/gwin7ok/noticeWindowFinder/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/gwin7ok/noticeWindowFinder/releases/tag/v1.0.0
+[v1.0.0]: https://github.com/gwin7ok/noticeWindowFinder/releases/tag/v1.0.0
