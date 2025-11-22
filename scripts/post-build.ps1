@@ -52,37 +52,4 @@ if (-not $SkipZip) {
 }
 
 Write-Host "post-build.ps1 complete"
-param(
-    [string]$ProjectPath = "csharp/ToastCloser/ToastCloser.csproj",
-    [string]$ArtifactPrefix = "ToastCloser",
-    [switch]$DryRun
-)
-
-Write-Host "post-build.ps1: ProjectPath=$ProjectPath ArtifactPrefix=$ArtifactPrefix DryRun=$DryRun"
-
-$publishDir = Join-Path -Path (Get-Location) -ChildPath "artifacts\win-x64"
-if (-not (Test-Path $publishDir)) {
-    Write-Host "Publish directory not found: $publishDir"
-    if ($DryRun) { exit 0 }
-    throw "Publish output not found"
-}
-
-# Call Python helper to package artifacts and determine version
-$py = "python"
-$script = Join-Path -Path (Split-Path -Parent $MyInvocation.MyCommand.Definition) -ChildPath "post-build.py"
-
-$args = @()
-$args += "-publishDir"; $args += $publishDir
-$args += "-artifactPrefix"; $args += $ArtifactPrefix
-$args += "-arch"; $args += "win-x64"
-
-if ($DryRun) {
-    Write-Host "DRYRUN: Would run: $py $script $($args -join ' ')"
-    exit 0
-}
-
-Write-Host "Running packaging helper..."
-& $py $script $args
-if ($LASTEXITCODE -ne 0) { throw "post-build.py failed with code $LASTEXITCODE" }
-
-Write-Host "post-build completed."
+Write-Host "post-build.ps1 complete"
