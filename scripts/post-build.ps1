@@ -2,7 +2,9 @@ param(
     [string]$ProjectPath = "csharp\ToastCloser\ToastCloser.csproj",
     [string]$ArtifactPrefix = "ToastCloser",
     [string]$Configuration = "Release",
-    [switch]$SkipZip = $false
+    [switch]$SkipZip = $false,
+    [string]$Version = '',
+    [switch]$UseTempDir = $false
 )
 
 Write-Host "post-build.ps1: ProjectPath=$ProjectPath ArtifactPrefix=$ArtifactPrefix Configuration=$Configuration SkipZip=$SkipZip"
@@ -21,10 +23,10 @@ function Get-VersionFromCsProj($csproj)
     return $null
 }
 
-$version = Get-VersionFromCsProj $ProjectPath
-if (-not $version) {
-    $version = $env:GITHUB_REF_NAME
-}
+$version = $null
+if ($Version -and $Version.Trim() -ne '') { $version = $Version }
+if (-not $version) { $version = Get-VersionFromCsProj $ProjectPath }
+if (-not $version) { $version = $env:GITHUB_REF_NAME }
 if (-not $version) { $version = "0.0.0" }
 
 Write-Host "Determined version: $version"
@@ -54,7 +56,12 @@ Write-Host "Publish directory: $publishDir"
 if (-not $SkipZip) {
     $arch = "win-x64"
     $zipName = "${ArtifactPrefix}_${version}_${arch}.zip"
-    $zipPath = Join-Path $PWD $zipName
+    if ($UseTempDir) {
+        $temp = [IO.Path]::GetTempPath()
+        $zipPath = Join-Path $temp $zipName
+    } else {
+        $zipPath = Join-Path $PWD $zipName
+    }
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Write-Host "Creating zip: $zipPath from $publishDir"
     try {

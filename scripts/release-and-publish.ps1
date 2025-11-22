@@ -36,7 +36,19 @@ if ($DryRun) {
     Write-Host "Dry run: would call post-build packaging with version from tag or csproj"
     Write-Host "Example command: pwsh .\scripts\post-build.ps1 -ProjectPath 'csharp\\ToastCloser\\ToastCloser.csproj' -ArtifactPrefix 'ToastCloser'"
 } else {
-    pwsh -NoProfile -File .\scripts\post-build.ps1 -ProjectPath 'csharp\ToastCloser\ToastCloser.csproj' -ArtifactPrefix 'ToastCloser'
+    # Determine tag (if available) to pass to post-build so the archive name includes the correct version
+    $tagForBuild = $env:GITHUB_REF_NAME
+    if (-not $tagForBuild -and $env:GITHUB_REF -match 'refs/tags/(.+)') { $tagForBuild = $matches[1] }
+
+    $useTemp = $false
+    if ($env:GITHUB_ACTIONS -and $env:GITHUB_ACTIONS -eq 'true') { $useTemp = $true }
+
+    $pbArgs = "-ProjectPath 'csharp\ToastCloser\ToastCloser.csproj' -ArtifactPrefix 'ToastCloser'"
+    if ($tagForBuild) { $pbArgs += " -Version '$tagForBuild'" }
+    if ($useTemp) { $pbArgs += ' -UseTempDir' }
+
+    Write-Host "Calling post-build with: $pbArgs"
+    pwsh -NoProfile -File .\scripts\post-build.ps1 $pbArgs
 }
 
 # After packaging: upload via GH CLI if available, otherwise instruct user to upload
@@ -70,31 +82,39 @@ if (-not $DryRun) {
 
             # Ensure a release exists for the tag; create if missing
             gh release view $tag --repo "$RepoOwner/$RepoName" > $null 2>&1
+            # Determine notes file: prefer RELEASE_NOTES_FILE env (set by CI), otherwise generate from CHANGELOG.md
+            $notesFile = $null
+            if ($env:RELEASE_NOTES_FILE -and (Test-Path $env:RELEASE_NOTES_FILE)) {
+                $notesFile = (Resolve-Path $env:RELEASE_NOTES_FILE).Path
+            } else {
+                $notesFile = Join-Path $PWD ("release-notes-$tag.md")
+                try {
+                    pwsh -NoProfile -File .\scripts\generate-release-body.ps1 -Tag $tag -OutFile $notesFile 2>$null
+                    if (-not (Test-Path $notesFile)) { $notesFile = $null }
+                } catch {
+                    Write-Host "generate-release-body failed: $_"
+                    $notesFile = $null
+                }
+            }
+
+            # If release does not exist, create. If exists, edit notes to overwrite.
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "Release for tag $tag not found; creating release..."
-
-                # Determine notes file: prefer RELEASE_NOTES_FILE env (set by CI), otherwise generate from CHANGELOG.md
-                $notesFile = $null
-                if ($env:RELEASE_NOTES_FILE -and (Test-Path $env:RELEASE_NOTES_FILE)) {
-                    $notesFile = (Resolve-Path $env:RELEASE_NOTES_FILE).Path
-                } else {
-                    $notesFile = Join-Path $PWD ("release-notes-$tag.md")
-                    try {
-                        pwsh -NoProfile -File .\scripts\generate-release-body.ps1 -Tag $tag -OutFile $notesFile 2>$null
-                        if (-not (Test-Path $notesFile)) { $notesFile = $null }
-                    } catch {
-                        Write-Host "generate-release-body failed: $_"
-                        $notesFile = $null
-                    }
-                }
-
                 if ($notesFile) {
                     gh release create $tag --repo "$RepoOwner/$RepoName" --title $tag --notes-file $notesFile > $null 2>&1
                 } else {
                     gh release create $tag --repo "$RepoOwner/$RepoName" --title $tag --notes "" > $null 2>&1
                 }
+            } else {
+                Write-Host "Release for tag $tag already exists; updating release notes (overwrite)..."
+                if ($notesFile) {
+                    gh release edit $tag --repo "$RepoOwner/$RepoName" --notes-file $notesFile > $null 2>&1
+                } else {
+                    gh release edit $tag --repo "$RepoOwner/$RepoName" --notes "" > $null 2>&1
+                }
             }
 
+            # Upload asset, overwriting existing asset with same name
             gh release upload $tag $($z.FullName) --repo "$RepoOwner/$RepoName" --clobber
         }
     } elseif ($zips) {
