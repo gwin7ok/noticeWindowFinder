@@ -23,27 +23,14 @@ jobs:
         shell: pwsh
         run: |
           dotnet restore csharp/ToastCloser/ToastCloser.csproj
-          dotnet publish csharp/ToastCloser/ToastCloser.csproj -c Release -r win-x64 --self-contained false /p:PublishTrimmed=false -o publish/ToastCloser/win-x64
-
-      - name: Run organize script (ensure dll/Lang layout)
-        shell: pwsh
-        run: |
-          $script = 'csharp/ToastCloser/organize_publish.ps1'
-          if (Test-Path $script) {
-            pwsh -NoProfile -ExecutionPolicy Bypass -File $script "${{ github.workspace }}\publish\ToastCloser\win-x64"
-          } else {
-            Write-Output "organize_publish.ps1 not found, skipping"
-          }
-
-      - name: Run fix script (cleanup nested Lang)
-        shell: pwsh
-        run: |
-          $fix = 'csharp/ToastCloser/fix_lang_publish.ps1'
-          if (Test-Path $fix) {
-            pwsh -NoProfile -ExecutionPolicy Bypass -File $fix "${{ github.workspace }}\publish\ToastCloser\win-x64"
-          } else {
-            Write-Output "fix_lang_publish.ps1 not found, skipping"
-          }
+          # Publish as self-contained folder (no single-file) to match local publish output
+          dotnet publish csharp/ToastCloser/ToastCloser.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            /p:PublishSingleFile=false `
+            /p:PublishTrimmed=false `
+            -o publish/ToastCloser/win-x64
 
       - name: Zip publish folder
         shell: pwsh
