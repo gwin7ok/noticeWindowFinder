@@ -36,113 +36,83 @@ dotnet run --project .\csharp\ToastCloser\ToastCloser.csproj --configuration Deb
 
 ```powershell
 pwsh -File .\scripts\generate-ico.ps1
-```
-## 開発用スクリプト
+## ToastCloser — Chrome/YouTube 通知の自動処理ユーティリティ
 
-- アイコン生成: `scripts/generate-ico.ps1`
-- リリース本文生成: `scripts/generate-release-body.ps1`
-- パッケージング: `scripts/post-build.ps1`
-- リリース作成補助: `scripts/release-and-publish.ps1`
+Windows デスクトップに表示される通知（トースト）を検出し、YouTube に関連する通知を自動で閉じたり履歴へ移すなどの操作を行うデスクトップユーティリティです。
 
-# noticeWindowFinder (Chrome YouTube 通知自動閉鎖)
+短い紹介:
 
-## Overview
+- **プロジェクト名**: `ToastCloser`
+- **リポジトリ**: `gwin7ok/ToastCloser` (https://github.com/gwin7ok/ToastCloser)
+- **目的**: デスクトップ通知を自動で検出・操作し、不要な YouTube 通知を自動で処理する
 
-- **リポジトリ**: `noticeWindowFinder`
-- **主な目的**: Windows 上で表示される通知（トースト）を検出し、YouTube 関連の通知を自動で処理（既定は通知を履歴へ移動または閉じる）するデスクトップユーティリティ `ToastCloser` の実装とツール群を含みます。
+主要技術:
 
-## ToastCloser の概要
+- 言語/ランタイム: C# / .NET 8 (`net8.0-windows`)
+- UI 自動化: `FlaUI` を利用して Windows の通知 UI を検出・操作
 
-- **言語/ランタイム**: C# / .NET 8 ( `net8.0-windows` )
-- **UI 自動化**: `FlaUI` を使用して Windows の通知 UI を検出・操作します。
-- **動作モード**: トレイアプリケーションとして単一インスタンスで動作し、既定は「履歴に移す（Notification Center を開く）」方式です（`preserveHistory`）。
-- **設定**: 実行ディレクトリに置かれる `ToastCloser.ini`（`Config` クラスで読み書き）で各種パラメータを変更できます（`DisplayLimitSeconds`、`PollIntervalSeconds`、`YoutubeOnly` など）。
+配布版の利用方法 (推奨)
 
-## ビルド要件
+1. GitHub Releases から最新のアーカイブをダウンロードします: https://github.com/gwin7ok/ToastCloser/releases
+2. ZIP を解凍して `ToastCloser.exe` を実行してください（同一ユーザーのデスクトップセッションで実行する必要があります）。
 
-- **.NET SDK**: .NET 8 SDK が必要です。`dotnet --version` で確認してください。
-- **依存パッケージ**: `FlaUI.Core` / `FlaUI.UIA3` が `csproj` に定義されています。`dotnet restore` で自動取得されます。
+注意:
 
-## ビルドと実行（ローカル開発）
+- 通知 UI を操作するため、同一ユーザーのデスクトップセッションで実行してください（サービスや別ユーザーのセッションからは操作できません）。
+- 必要に応じて管理者権限で実行してください。
 
-1. ルートから Visual Studio でソリューションを開くか、PowerShell で以下を実行:
+ローカルでビルド（開発者向け）
+
+前提: .NET 8 SDK がインストールされていること。
+
+ルートからビルドと実行の例:
 
 ```powershell
-# csharp/ToastCloser をビルド
 dotnet build .\csharp\ToastCloser\ToastCloser.csproj -c Debug
-
-# デバッグ実行（コンソール版が開きます）
 dotnet run --project .\csharp\ToastCloser\ToastCloser.csproj --configuration Debug
 ```
 
-注意: ビルドは `Resources/ToastCloser.ico` が既に存在することを前提としています。リポジトリ付属の PNG から ICO を生成するには次のスクリプトを事前に実行してください:
+アイコンが必要な場合（`Resources/ToastCloser.ico`）は、リポジトリ付属の PNG から生成するスクリプトを利用できます:
 
 ```powershell
-# リポジトリルートから実行
 pwsh -File .\scripts\generate-ico.ps1
 ```
 
-1. 設定をファイルで変更する場合は、実行後に生成される `ToastCloser.ini` を編集してください。
-
-## トレイ（GUI）で常駐させる
-
-- `ToastCloser` はトレイアプリとして動作します。通常は単独実行でトレイアイコンが表示され、設定ウィンドウやログ出力を利用できます。
-
-
-## 設定項目（主なもの）
+主な設定項目
 
 - `DisplayLimitSeconds`: 通知を処理対象とする表示秒数の閾値（デフォルト 10）
 - `PollIntervalSeconds`: UI 検出ポーリング間隔（秒）
-- `YoutubeOnly`: true の場合、YouTube に由来する通知のみ処理対象
+- `YoutubeOnly`: true の場合、YouTube に由来する通知のみ処理する
 - `VerboseLog`: true にするとデバッグログを詳細に出力
-- 設定ファイル: 実行ディレクトリの `ToastCloser.ini`（`Config.Load()` / `Config.Save()` で読み書き）
 
-## ログ
+設定ファイル: 実行ディレクトリの `ToastCloser.ini`（`Config.Load()` / `Config.Save()` で読み書きされます）
+
+ログ
 
 - 実行ディレクトリの `logs/auto_closer.log` に出力されます。起動時にローテーションされ、古いログは `Config.LogArchiveLimit` に従い削除されます。
 
-## トラブルシューティング
+トラブルシューティング
 
 - UI 自動化は「同一ユーザーのデスクトップセッション」でのみ有効です。サービスや別ユーザーのセッションからは操作できません。
-- 管理者権限で実行されているアプリや UAC により制限されたプロセスは操作できない場合があります。
-- UI 検出のタイミングや名称は Windows のローカライズや OS バージョンで変わることがあるため、問題がある場合は `logs/` の出力を確認してください。
+- 管理者権限が必要なケースや UAC による制限がある場合、対象ウィンドウを操作できないことがあります。
+- 問題が発生したら `logs/` の出力を確認してください。
 
-## 開発用ツールと補助スクリプト
+開発用スクリプトとツール
 
-- `tools/` ディレクトリに小さな補助ツール（アイコン生成やテスト用実行）が置かれています。
-- VS Code のタスク (`.vscode/tasks.json`) にビルド / publish / 実行用のエントリが用意されています。タスク名: `dotnet: build ToastCloser`, `Publish: (Release win-x64 single-file)` など。
+- `scripts/` にビルドやリリースを補助するスクリプトが含まれます（例: `generate-ico.ps1`、`release-and-publish.ps1`）。
+- `tools/` 配下には補助ツール（アイコン生成やテスト用ツール）が置かれています。
+- VS Code 用タスク（`.vscode/tasks.json`）にビルド／publish／実行用のエントリがあります。タスク例: `dotnet: build ToastCloser`、`Publish: (Release win-x64 single-file)`。
 
-## 更新履歴 (Changelog)
+インストール（リリースを使う）
 
-- このリポジトリの更新履歴は `CHANGELOG.md` にまとめています。
+GitHub Releases にて配布されている ZIP をダウンロードして解凍し、中の `ToastCloser.exe` を実行してください。
 
-```
+貢献 / ライセンス
 
-## インストール（リリースを使う）
+- 個人のユーティリティとして管理しています。変更を加える場合は動作を理解した上でプルリクエストをお送りください。
 
-リリースページにアップロードされている `ToastCloser` のアーカイブ（例: `ToastCloser_vX.Y.Z_win-x64.zip`）をダウンロードして解凍し、その中の実行ファイルを実行するだけで利用できます。手順の例をいくつか示します。
-  - GitHub の [Releases](https://github.com/gwin7ok/noticeWindowFinder/releases) ページに移動し、最新の `ToastCloser_*_win-x64.zip` をダウンロードします。ZIP を右クリックして「すべて展開」などで解凍し、中の `ToastCloser.exe` をダブルクリックして起動します。
-
-
-短い注意:
-
-- `ToastCloser` はデスクトップ上の通知 UI を操作するため、同一ユーザーのデスクトップセッションで実行してください。
-- 必要に応じて管理者権限で実行してください。
-- 注意点
-
-  - `ToastCloser` は Windows デスクトップの通知 UI を操作するため、同一ユーザーのデスクトップセッションで実行してください（サービスや別ユーザーのセッションでは動作しません）。
-
-  - 必要に応じて管理者権限で実行してください（操作対象のウィンドウや権限に依存します）。
-
-  - 設定は実行ディレクトリの `ToastCloser.ini` で変更できます。ログはそのディレクトリの `logs/` に出力されます。
-
-  - セキュリティ上の理由から、ダウンロードしたアーカイブは信頼できるソースのみを使用してください。
-
-
-## 貢献 / ライセンス
-
-- このリポジトリは個人的なユーティリティを収めています。変更を加える場合はコードの動作を理解した上でプルリクエストを送ってください。
+更新履歴は `CHANGELOG.md` を参照してください。
 
 ---
 
-この README は `ToastCloser` の最新の挙動とワークフローに合わせて更新しました。追加で入れたい使用例やスクリーンショット、配布方法があれば教えてください。
+さらに追加したい使用例、スクリーンショット、または配布手順があれば教えてください。
