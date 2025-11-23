@@ -1,0 +1,68 @@
+name: Publish and Release
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore & Publish
+        shell: pwsh
+        run: |
+          dotnet restore csharp/ToastCloser/ToastCloser.csproj
+          dotnet publish csharp/ToastCloser/ToastCloser.csproj -c Release -r win-x64 --self-contained false /p:PublishTrimmed=false -o publish/ToastCloser/win-x64
+
+      - name: Run organize script (ensure dll/Lang layout)
+        shell: pwsh
+        run: |
+          $script = 'csharp/ToastCloser/organize_publish.ps1'
+          if (Test-Path $script) {
+            pwsh -NoProfile -ExecutionPolicy Bypass -File $script "${{ github.workspace }}\publish\ToastCloser\win-x64"
+          } else {
+            Write-Output "organize_publish.ps1 not found, skipping"
+          }
+
+      - name: Run fix script (cleanup nested Lang)
+        shell: pwsh
+        run: |
+          $fix = 'csharp/ToastCloser/fix_lang_publish.ps1'
+          if (Test-Path $fix) {
+            pwsh -NoProfile -ExecutionPolicy Bypass -File $fix "${{ github.workspace }}\publish\ToastCloser\win-x64"
+          } else {
+            Write-Output "fix_lang_publish.ps1 not found, skipping"
+          }
+
+      - name: Zip publish folder
+        shell: pwsh
+        run: |
+          $out = "${{ github.workspace }}\publish\ToastCloser\win-x64"
+          $zip = "${{ github.workspace }}\publish\ToastCloser_win-x64.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path "$out\*" -DestinationPath $zip -Force
+
+      - name: Upload artifact (workflow artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ToastCloser-win-x64
+          path: publish/ToastCloser_win-x64.zip
+
+      - name: Create GitHub Release and upload asset (when tagged)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: publish/ToastCloser_win-x64.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -26,7 +26,7 @@
       "label": "Run: Workspace Runner",
       "type": "shell",
       "command": "pwsh",
-        "args": [
+      "args": [
         "-NoProfile",
         "-File",
         "${workspaceFolder}\\.vscode\\run-in-new-window.ps1",
@@ -45,8 +45,7 @@
         "panel": "shared"
       },
       "problemMatcher": []
-    }
-    ,
+    },
     {
       "label": "Send: Test",
       "type": "shell",
@@ -61,8 +60,7 @@
         "panel": "shared"
       },
       "problemMatcher": []
-    }
-    ,
+    },
     {
       "label": "Send: Test delay",
       "type": "shell",
@@ -79,7 +77,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Publish: (Release win-x64 single-file)",
+      "label": "Publish: (Release win-x64)",
       "type": "shell",
       "command": "dotnet",
       "args": [
@@ -87,11 +85,7 @@
         "${workspaceFolder}\\csharp\\ToastCloser\\ToastCloser.csproj",
         "-c",
         "Release",
-        "-r",
-        "win-x64",
-        "--self-contained",
-        "true",
-        "/p:PublishSingleFile=true",
+        "/p:PublishSingleFile=false",
         "/p:PublishTrimmed=false",
         "-o",
         "${workspaceFolder}\\publish\\ToastCloser\\win-x64"

@@ -7,6 +7,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <StartupObject>ToastCloser.TrayBootstrap</StartupObject>
     <ApplicationIcon>Resources\ToastCloser.ico</ApplicationIcon>
+    
+    <NeutralResourcesLanguage>ja</NeutralResourcesLanguage>
+    <SatelliteResourceLanguages>ja</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -48,5 +51,15 @@
     <!-- Enable compression for the final artifact to reduce size in normal releases -->
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
+
+  <!-- NOTE: OrganizePublishOutput and AfterPublish removed. Final reorganization is
+       handled only by `FinalizeReorganizeOutput` so Debug and Publish follow the
+       exact same path selection and processing, minimizing ordering/race differences. -->
+
+  <!-- Output reorganization removed: all builds keep DLLs in the output root.
+       Previously this project moved managed dependencies into a `dll\` subfolder
+       and invoked an external `organize.ps1`. That behavior was removed so the
+       runtime's default probing finds dependencies when they are present in the
+       application base directory. -->
 
 </Project>
