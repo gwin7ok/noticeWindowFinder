@@ -1,5 +1,11 @@
 name: Publish and Release
 
+# Ensure Actions token has rights to create releases and upload artifacts
+permissions:
+  contents: write
+  packages: write
+  actions: read
+
 on:
   workflow_dispatch: {}
   push:
