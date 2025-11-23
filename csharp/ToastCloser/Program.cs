@@ -60,6 +60,9 @@ namespace ToastCloser
             string shortcutKeyMode = cfg.ShortcutKeyMode ?? "noticecenter";
             bool wmCloseOnly = false;
 
+            // Emit startup INFO (match v1.0.0 behavior)
+            try { Logger.Instance?.Info($"ToastCloser starting (displayLimitSeconds={minSeconds} pollIntervalSeconds={poll} detectOnly={detectOnly} preserveHistory={preserveHistory} shortcutKeyMode={shortcutKeyMode} wmCloseOnly={wmCloseOnly} detectionTimeoutMS={detectionTimeoutMS} winShortcutKeyIntervalMS={winShortcutKeyIntervalMS})"); } catch { }
+
             UiaEngine.RunLoop(cfg, exeFolder, logsDir, minSeconds, poll, detectionTimeoutMS, detectOnly, preserveHistory, shortcutKeyWaitIdleMS, shortcutKeyMaxWaitMS, winShortcutKeyIntervalMS, shortcutKeyMode, wmCloseOnly);
         }
 

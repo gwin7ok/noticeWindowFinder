@@ -348,13 +348,15 @@ namespace ToastCloser
                     if (found == null || found.Length == 0)
                     {
                         // No toasts found by CoreWindow-based search; end scan
-                        logger?.Debug($"Toast search: end (duration={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms) found=0");
+                        logger?.Info($"No toasts found by CoreWindow-based search; ending search for this scan. (elapsed={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms)");
+                        logger?.Info($"Toast search: end (duration={(DateTime.UtcNow - searchStart).TotalMilliseconds:0.0}ms) found=0");
                         try { Thread.Sleep(TimeSpan.FromSeconds(poll)); } catch { }
                         continue;
                     }
 
                     var searchEnd = DateTime.UtcNow;
                     var searchMS = (searchEnd - searchStart).TotalMilliseconds;
+                    logger?.Debug($"Scan found {found.Length} candidates durationMS={searchMS:0.0}");
                     logger?.Info($"Toast search: end (duration={searchMS:0.0}ms) found={found.Length}");
 
                     // Re-iterate through found for existing processing (we will process again below)
