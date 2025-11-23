@@ -85,6 +85,8 @@
         "${workspaceFolder}\\csharp\\ToastCloser\\ToastCloser.csproj",
         "-c",
         "Release",
+        "--self-contained",
+        "false",
         "/p:PublishSingleFile=false",
         "/p:PublishTrimmed=false",
         "-o",

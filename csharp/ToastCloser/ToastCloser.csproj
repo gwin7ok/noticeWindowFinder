@@ -57,6 +57,8 @@
        publishes match developer expectations (no bundled runtime). -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <SelfContained>false</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <!-- NOTE: OrganizePublishOutput and AfterPublish removed. Final reorganization is
