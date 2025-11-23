@@ -17,5 +17,5 @@ and this project adheres to Semantic Versioning.
 
 - 初期リリース
 
-[Unreleased]: https://github.com/gwin7ok/noticeWindowFinder/compare/v1.0.0...HEAD
-[v1.0.0]: https://github.com/gwin7ok/noticeWindowFinder/releases/tag/v1.0.0
+[Unreleased]: https://github.com/gwin7ok/ToastCloser/compare/v1.0.0...HEAD
+[v1.0.0]: https://github.com/gwin7ok/ToastCloser/releases/tag/v1.0.0

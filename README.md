@@ -1,8 +1,8 @@
-# noticeWindowFinder (Chrome YouTube 通知自動閉鎖)
+# ToastCloser (Chrome YouTube 通知自動閉鎖)
 
 ## 概要
 
-- **リポジトリ**: `noticeWindowFinder`
+- **リポジトリ**: `ToastCloser`
 - **目的**: Windows 上で表示される通知（トースト）を検出し、YouTube 関連の通知を自動で処理するデスクトップユーティリティ `ToastCloser` を含みます。
 
 ## 主要技術
@@ -16,7 +16,7 @@
 
   例:
 
-  1. Releases: https://github.com/gwin7ok/noticeWindowFinder/releases
+  1. Releases: https://github.com/gwin7ok/ToastCloser/releases
   2. 最新の `ToastCloser_*_win-x64.zip` をダウンロードして解凍。
   3. 解凍フォルダ内の `ToastCloser.exe` をダブルクリックして起動。
 
