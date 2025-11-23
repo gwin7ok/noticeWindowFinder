@@ -35,7 +35,7 @@ namespace ToastCloser
                 if (!isBackgroundService)
                 {
                     bool createdNew = false;
-                    var mutexName = "Global\\noticeWindowFinder_ToastCloser_mutex";
+                    var mutexName = "Global\\ToastCloser_mutex";
                     var single = new System.Threading.Mutex(true, mutexName, out createdNew);
                     if (!createdNew)
                     {
