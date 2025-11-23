@@ -1,6 +1,6 @@
 param(
     [string]$Repo = 'gwin7ok/ToastCloser',
-    [string]$Workflow = 'release.yml',
+    [string]$Workflow = 'publish-release.yml',
     [int]$TimeoutSeconds = 300,
     [int]$PollIntervalSeconds = 5
 )

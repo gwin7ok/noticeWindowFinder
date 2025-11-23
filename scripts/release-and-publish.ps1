@@ -40,7 +40,7 @@ if (-not $isCI -and -not $AllowLocalBuild) {
 if (-not $SkipBuild) {
     Write-Host "Building and publishing..."
     dotnet restore "csharp\ToastCloser\ToastCloser.csproj"
-    dotnet publish "csharp\ToastCloser\ToastCloser.csproj" -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o "publish\ToastCloser\win-x64"
+    dotnet publish "csharp\ToastCloser\ToastCloser.csproj" -c Release -r win-x64 --self-contained false /p:PublishSingleFile=false /p:PublishTrimmed=false -o "publish\ToastCloser\win-x64"
 } else {
     Write-Host "Skipping build (SkipBuild)"
 }

@@ -23,11 +23,11 @@ jobs:
         shell: pwsh
         run: |
           dotnet restore csharp/ToastCloser/ToastCloser.csproj
-          # Publish as self-contained folder (no single-file) to match local publish output
+          # Publish framework-dependent folder (no self-contained) to match local publish output
           dotnet publish csharp/ToastCloser/ToastCloser.csproj `
             -c Release `
             -r win-x64 `
-            --self-contained true `
+            --self-contained false `
             /p:PublishSingleFile=false `
             /p:PublishTrimmed=false `
             -o publish/ToastCloser/win-x64

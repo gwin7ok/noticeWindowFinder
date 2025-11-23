@@ -53,6 +53,12 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
+  <!-- Ensure Release publishes are framework-dependent by default so CI and local
+       publishes match developer expectations (no bundled runtime). -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
   <!-- NOTE: OrganizePublishOutput and AfterPublish removed. Final reorganization is
        handled only by `FinalizeReorganizeOutput` so Debug and Publish follow the
        exact same path selection and processing, minimizing ordering/race differences. -->
